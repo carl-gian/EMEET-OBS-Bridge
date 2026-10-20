@@ -1,0 +1,27 @@
+appId: com.gi.obsmastercontroller
+productName: OBS Master Controller
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+  - package.json
+# The PowerShell helper must live OUTSIDE the .asar archive so powershell.exe can read it.
+extraResources:
+  - from: resources/ptz-worker.ps1
+    to: ptz-worker.ps1
+  - from: resources/icon.ico
+    to: icon.ico
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OBS Master Controller

@@ -1,0 +1,371 @@
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import { exec, spawn } from 'child_process'
+import { existsSync, readFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { is } from './is'
+import { IPC } from '@shared/types'
+import type { AppConfig, AppState, PtzCommand } from '@shared/types'
+import { Controller } from '@core/controller'
+import { normalizeSceneKey } from '@shared/scene'
+import { Logger } from './logger'
+import { ConfigStore } from './configStore'
+import { MockDriver, PowerShellDriver, workerScriptPath, type EmeetDriver } from './emeetDriver'
+import { ObsClient } from './obsClient'
+import { buildDiagnosticsZip } from './diagnostics'
+
+const isWin = process.platform === 'win32'
+let win: BrowserWindow | null = null
+let tray: Tray | null = null
+let quitting = false
+
+// ---------------------------------------------------------------- single instance ----
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showWindow())
+  app.whenReady().then(main)
+}
+
+function iconPath(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'icon.ico') : join(app.getAppPath(), 'resources', 'icon.ico')
+}
+
+function showWindow() {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
+
+function createWindow(startHidden: boolean) {
+  win = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 980,
+    minHeight: 600,
+    show: false,
+    title: 'OBS Master Controller',
+    backgroundColor: '#0f1115',
+    autoHideMenuBar: true,
+    icon: existsSync(iconPath()) ? iconPath() : undefined,
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: false }
+  })
+  win.setMenu(null)
+  win.once('ready-to-show', () => {
+    if (!startHidden) win?.show()
+  })
+  // Closing the window only hides it to the tray.
+  win.on('close', (e) => {
+    if (!quitting) {
+      e.preventDefault()
+      win?.hide()
+    }
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  else void win.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+function applyLoginItem(cfg: AppConfig) {
+  if (!app.isPackaged || !isWin) return // never register the dev copy of Electron
+  app.setLoginItemSettings({ openAtLogin: cfg.general.startWithWindows, args: cfg.general.startMinimized ? ['--hidden'] : [] })
+}
+
+function main() {
+  app.setAppUserModelId('com.gi.obsmastercontroller')
+  const logDir = join(app.getPath('userData'), 'logs')
+  const logger = new Logger(logDir)
+  const log = logger.make('APP')
+  const obsLog = logger.make('OBS')
+  const ptzLog = logger.make('PTZ')
+  const emeetLog = logger.make('EMEET')
+
+  const version = app.getVersion()
+  log.info(`BUILD ${version} (electron ${process.versions.electron}, node ${process.versions.node}, ${process.platform} ${process.arch}, ${app.isPackaged ? 'installed' : 'dev'})`)
+  log.info(`Log folder: ${logDir}`)
+
+  process.on('uncaughtException', (e) => log.error(`Uncaught exception: ${e.stack ?? e}`))
+  process.on('unhandledRejection', (e) => log.error(`Unhandled rejection: ${(e as Error)?.stack ?? e}`))
+
+  // ---- config ----
+  const store = new ConfigStore(log)
+  store.load()
+  logger.level = store.get().logging.level
+  log.info(`Config file: ${store.path}`)
+  const c0 = store.get()
+  log.info(
+    `Settings: OBS ws://${c0.obs.host}:${c0.obs.port} | intra '${c0.transitions.intraGroup.name}' ${c0.transitions.intraGroup.durationMs} ms | cross '${c0.transitions.crossGroup.name}' ${c0.transitions.crossGroup.durationMs} ms | mode ${c0.transitions.crossGroupMode} | click offset ${c0.ptz.fireOffsetMs} ms | tracking ${c0.tracking.enabled ? 'on' : 'off'}`
+  )
+  applyLoginItem(c0)
+
+  // ---- camera driver ----
+  const driver: EmeetDriver = isWin ? new PowerShellDriver(log, ptzLog, emeetLog) : new MockDriver(ptzLog, emeetLog)
+  if (!isWin) log.warn('Not running on Windows: camera clicks are MOCKED (logged only). The real build uses the PowerShell helper.')
+  else log.info(`PTZ helper script: ${workerScriptPath()}`)
+
+  // ---- controller + OBS ----
+  let pushTimer: ReturnType<typeof setTimeout> | null = null
+  const controller: Controller = new Controller({
+    obs: { call: (t, d) => obs.link.call(t, d), batch: (r) => obs.link.batch(r) },
+    ptzSink: driver,
+    ptzLog,
+    log: obsLog,
+    getConfig: () => store.get(),
+    onChange: () => schedulePush()
+  })
+  const obs: ObsClient = new ObsClient(obsLog, () => store.get(), controller)
+  obs.onStatus = () => schedulePush()
+  driver.onStatus = () => schedulePush()
+
+  function buildState(): AppState {
+    return {
+      version,
+      platform: process.platform,
+      obs: { status: obs.status, obsVersion: controller.obsVersion, wsVersion: controller.wsVersion, studioMode: controller.studioMode, error: obs.lastError || undefined },
+      program: controller.programScene,
+      preview: controller.previewScene,
+      scenes: controller.obsScenes,
+      camera: { group: controller.ptz.cameraGroup, tracking: controller.ptz.tracking, driver: driver.status, hwnd: driver.hwnd },
+      dryRun: controller.dryRun,
+      bridgeState: controller.bridgeState
+    }
+  }
+  function schedulePush() {
+    updateTray()
+    if (pushTimer) return
+    pushTimer = setTimeout(() => {
+      pushTimer = null
+      win?.webContents.send(IPC.state, buildState())
+    }, 40)
+  }
+  logger.onEntry = (e) => win?.webContents.send(IPC.logPush, e)
+
+  const startHidden = process.argv.includes('--hidden')
+  createWindow(startHidden)
+  createTray()
+
+  // ---- start everything ----
+  driver.start(c0.emeet)
+  if (c0.general.launchObsOnStart) void launchObs(c0)
+  obs.start()
+
+  store.onExternalChange = (cfg) => {
+    logger.level = cfg.logging.level
+    controller.onConfigChanged()
+    win?.webContents.send('config:push', cfg)
+  }
+  store.watchFile()
+
+  // ------------------------------------------------------------------ tray ----
+  function createTray() {
+    let img = nativeImage.createFromPath(iconPath())
+    if (!img.isEmpty()) img = img.resize({ width: 16, height: 16 })
+    tray = new Tray(img)
+    tray.on('click', () => (win?.isVisible() ? win.hide() : showWindow()))
+    updateTray()
+  }
+  function updateTray() {
+    if (!tray) return
+    const st = obs.status === 'connected' ? 'Connected to OBS' : obs.status === 'connecting' ? 'Connecting to OBS ...' : 'OBS not connected'
+    tray.setToolTip(`OBS Master Controller ${version} - ${st}`)
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: `OBS Master Controller ${version}`, enabled: false },
+        { label: st + (controller.dryRun ? '  (DRY RUN)' : ''), enabled: false },
+        { type: 'separator' },
+        { label: 'Show window', click: showWindow },
+        { label: 'Resync camera', click: () => controller.resyncPtz() },
+        { label: 'Dry run (log only)', type: 'checkbox', checked: controller.dryRun, click: (m) => (controller.dryRun = m.checked) },
+        { type: 'separator' },
+        { label: 'Open logs folder', click: () => void shell.openPath(logDir) },
+        { label: 'Export diagnostics ...', click: () => void exportDiagnostics() },
+        { type: 'separator' },
+        { label: 'Quit', click: () => app.quit() }
+      ])
+    )
+  }
+
+  // ----------------------------------------------------------- helper actions ----
+  async function exportDiagnostics() {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
+    const r = await dialog.showSaveDialog({
+      title: 'Save diagnostics zip',
+      defaultPath: join(app.getPath('desktop'), `OBS-Master-Controller-diagnostics-${stamp}.zip`),
+      filters: [{ name: 'Zip', extensions: ['zip'] }]
+    })
+    if (r.canceled || !r.filePath) return { ok: false }
+    try {
+      buildDiagnosticsZip({
+        zipPath: r.filePath,
+        logDir,
+        cfg: store.get(),
+        state: buildState(),
+        versions: { app: version, electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
+        configPath: store.path
+      })
+      log.info(`Diagnostics exported: ${r.filePath}`)
+      shell.showItemInFolder(r.filePath)
+      return { ok: true, path: r.filePath }
+    } catch (e) {
+      log.error(`Diagnostics export failed: ${(e as Error).message}`)
+      return { ok: false, error: (e as Error).message }
+    }
+  }
+
+  async function launchObs(cfg: AppConfig) {
+    const exe = cfg.general.obsPath
+    if (!isWin || !exe) return
+    if (!existsSync(exe)) {
+      log.error(`OBS path does not exist: ${exe}`)
+      return
+    }
+    const running = await new Promise<boolean>((resolve) => {
+      exec('tasklist /FI "IMAGENAME eq obs64.exe" /NH', (_e, out) => resolve(/obs64\.exe/i.test(out ?? '')))
+    })
+    if (running) {
+      log.info('OBS is already running - not launching it again.')
+      return
+    }
+    log.info(`Launching OBS: ${exe}`)
+    try {
+      // OBS must be started from its own folder or it cannot find its files.
+      spawn(exe, [], { cwd: dirname(exe), detached: true, stdio: 'ignore' }).unref()
+    } catch (e) {
+      log.error(`Could not launch OBS: ${(e as Error).message}`)
+    }
+  }
+
+  function afterConfigChange(before: AppConfig, after: AppConfig) {
+    logger.level = after.logging.level
+    applyLoginItem(after)
+    controller.onConfigChanged()
+    if (JSON.stringify(before.obs) !== JSON.stringify(after.obs)) obs.reconnect()
+    if (JSON.stringify(before.emeet) !== JSON.stringify(after.emeet) && after.emeet.enabled) driver.ensure(after.emeet)
+    win?.webContents.send('config:push', after)
+    schedulePush()
+  }
+
+  // ------------------------------------------------------------------- IPC ----
+  ipcMain.handle(IPC.getState, () => buildState())
+  ipcMain.handle(IPC.getLogs, () => logger.tail())
+  ipcMain.handle(IPC.getConfig, () => store.get())
+  ipcMain.handle(IPC.saveConfig, (_e, cfg: AppConfig) => {
+    const before = store.get()
+    const after = store.set(cfg)
+    log.info('Settings saved.')
+    afterConfigChange(before, after)
+    return after
+  })
+  ipcMain.handle(IPC.setSceneMapping, (_e, scene: string, presetId: string | null) => {
+    const before = store.get()
+    const after = store.update((c) => {
+      // drop any older spelling of the same scene (spacing/dash differences) so there is only one entry
+      for (const k of Object.keys(c.scenes)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.scenes[k]
+      if (presetId) c.scenes[scene] = presetId
+    })
+    log.info(`Scene mapping: '${scene}' -> ${presetId ?? 'None'}`)
+    afterConfigChange(before, after)
+    return after
+  })
+  ipcMain.handle(IPC.setSceneTracking, (_e, scene: string, on: boolean) => {
+    const before = store.get()
+    const after = store.update((c) => {
+      for (const k of Object.keys(c.sceneTracking)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.sceneTracking[k]
+      if (on) c.sceneTracking[scene] = true
+    })
+    log.info(`Scene tracking: '${scene}' -> ${on ? 'ON' : 'off'}`)
+    afterConfigChange(before, after)
+    return after
+  })
+  ipcMain.handle(IPC.setTrackingEnabled, (_e, on: boolean) => {
+    const before = store.get()
+    const after = store.update((c) => (c.tracking.enabled = on))
+    log.info(`Enable Tracking (master): ${on ? 'ON' : 'off'}`)
+    afterConfigChange(before, after)
+    return after
+  })
+  ipcMain.handle(IPC.resync, () => controller.resyncPtz())
+  ipcMain.handle(IPC.testClick, (_e, x: number, y: number, label: string) => {
+    const cfg = store.get()
+    const cmd: PtzCommand = {
+      id: Date.now() % 1e9,
+      label,
+      presetId: null,
+      reason: 'test click from Settings',
+      issuedAt: Date.now(),
+      clicks: [{ x, y, note: `test: ${label}` }],
+      emeet: cfg.emeet
+    }
+    log.info(`Test click '${label}' at screen(${x},${y})`)
+    if (controller.dryRun) log.info('(Dry run is ON - test click not sent)')
+    else driver.send(cmd)
+  })
+  ipcMain.handle(IPC.setDryRun, (_e, on: boolean) => {
+    controller.dryRun = on
+  })
+  ipcMain.handle(IPC.reconnect, () => obs.reconnect())
+  ipcMain.handle(IPC.openLogs, () => shell.openPath(logDir))
+  ipcMain.handle(IPC.exportDiagnostics, () => exportDiagnostics())
+  ipcMain.handle(IPC.clearLogsView, () => logger.clearView())
+  ipcMain.handle(IPC.browseFile, async (_e, title: string, extensions: string[]) => {
+    const r = await dialog.showOpenDialog(win!, { title, properties: ['openFile'], filters: [{ name: 'Files', extensions }] })
+    return r.canceled ? null : r.filePaths[0]
+  })
+  ipcMain.handle(IPC.importLegacy, async () => {
+    const r = await dialog.showOpenDialog(win!, { title: 'Pick your old OBS-Master-Controller.config.json', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (r.canceled) return { ok: false }
+    try {
+      const imported = store.fromFileObject(JSON.parse(readFileSync(r.filePaths[0], 'utf8')))
+      const before = store.get()
+      const after = store.set(imported)
+      log.info(`Imported settings from ${r.filePaths[0]}`)
+      afterConfigChange(before, after)
+      return { ok: true, config: after }
+    } catch (e) {
+      log.error(`Import failed: ${(e as Error).message}`)
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+
+  // Developer-only: OMC_SCREENSHOT=/path/file.png saves a picture of the window after a few seconds (used for UI checks).
+  if (process.env['OMC_SCREENSHOT']) {
+    const out = process.env['OMC_SCREENSHOT']
+    setTimeout(async () => {
+      try {
+        win?.show()
+        const img = await win!.webContents.capturePage()
+        require('fs').writeFileSync(out, img.toPNG())
+        if (process.env['OMC_SCREENSHOT_TABS']) {
+          const wc = win!.webContents
+          await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Settings').click()`)
+          for (const tab of ['General', 'OBS', 'Transition Rules', 'Camera']) {
+            await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(tab)}).click()`)
+            await new Promise((r) => setTimeout(r, 400))
+            require('fs').writeFileSync(out.replace('.png', `-${tab.replace(/ /g, '')}.png`), (await wc.capturePage()).toPNG())
+          }
+        }
+        log.info(`Screenshot saved: ${out}`)
+      } catch (e) {
+        log.error(`Screenshot failed: ${(e as Error).message}`)
+      }
+    }, Number(process.env['OMC_SCREENSHOT_DELAY'] || 6000))
+  }
+
+  // ------------------------------------------------------------------ quit ----
+  app.on('before-quit', () => {
+    quitting = true
+    log.info('Shutting down ...')
+    controller.dispose()
+    obs.stop()
+    driver.stop()
+    store.close()
+    setTimeout(() => logger.close(), 300)
+  })
+  app.on('window-all-closed', () => {
+    /* keep running in the tray */
+  })
+}

@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest'
+import { defaultConfig } from '@core/defaults'
+import { buildGroupMap, decide, normalizeSceneKey, resolveGroup } from '@core/decision'
+import { normalizeConfig, obsUri } from '@core/config'
+
+const cfg = defaultConfig()
+const { map } = buildGroupMap(cfg)
+const FULL = 'FULL STAGE----------(For Prayers and Switching Speaker)'
+const CLOSE = 'CLOSE UP----------(For talks only)'
+const READER = 'READER SETUP---------- (Watchtower & CBS)'
+
+describe('normalizeSceneKey', () => {
+  it('ignores whitespace, case and unicode dashes', () => {
+    expect(normalizeSceneKey('TABLE ----------- (For Standing)')).toBe(normalizeSceneKey('table\u2014----------(for  standing)'))
+  })
+})
+
+describe('decide', () => {
+  it('same preset = intra group', () => {
+    const d = decide(cfg, map, FULL, CLOSE)
+    expect(d.isCrossGroup).toBe(false)
+    expect(d.key).toBe('intraGroup')
+  })
+  it('different preset = cross group with target group', () => {
+    const d = decide(cfg, map, FULL, READER)
+    expect(d.isCrossGroup).toBe(true)
+    expect(d.targetGroup).toBe('Preset2')
+    expect(d.durationMs).toBe(1000)
+  })
+  it('unmapped scene is intra', () => {
+    expect(decide(cfg, map, FULL, 'Some Other Scene').isCrossGroup).toBe(false)
+    expect(resolveGroup(map, 'Some Other Scene')).toBeNull()
+  })
+  it('unknownScenePolicy=cross', () => {
+    const c = { ...cfg, behavior: { ...cfg.behavior, unknownScenePolicy: 'cross' as const } }
+    expect(decide(c, map, FULL, 'Unmapped').isCrossGroup).toBe(true)
+  })
+})
+
+describe('normalizeConfig', () => {
+  it('imports the old PowerShell layout (obs.uri, comments, obsolete delayMs)', () => {
+    const { config } = normalizeConfig({
+      _help: 'x',
+      obs: { uri: 'ws://127.0.0.1:4466', password: 'pw' },
+      ptz: { enabled: true, delayMs: 100, fireOffsetMs: 250 },
+      scenes: { A: 'Preset1', B: 'PresetNope' }
+    })
+    expect(config.obs.host).toBe('127.0.0.1')
+    expect(config.obs.port).toBe(4466)
+    expect(config.obs.password).toBe('pw')
+    expect(config.ptz.fireOffsetMs).toBe(250)
+    expect((config.ptz as any).delayMs).toBeUndefined()
+    expect(config.scenes).toEqual({ A: 'Preset1' })
+    expect(obsUri(config)).toBe('ws://127.0.0.1:4466')
+  })
+  it('garbage in -> defaults out', () => {
+    expect(normalizeConfig(null).config.presets.Preset1.x).toBe(929)
+    expect(normalizeConfig({ ptz: { fireOffsetMs: 'abc' } }).config.ptz.fireOffsetMs).toBe(200)
+  })
+})
