@@ -38,7 +38,7 @@ export class PtzDispatcher {
 
   desiredTracking(scene: string): boolean {
     const cfg = this.getConfig()
-    if (!cfg.tracking.enabled) return false
+    // No master switch: a scene's own Tracking tick in the Scene Manager is the only control.
     const key = normalizeSceneKey(scene)
     for (const [name, on] of Object.entries(cfg.sceneTracking)) if (on && normalizeSceneKey(name) === key) return true
     return false

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LogEntry, LogLevel } from '@shared/types'
-import { Button } from './ui'
+import { Button, HelpTip } from './ui'
 
 const RANK: Record<LogLevel, number> = { Debug: 0, Info: 1, Warn: 2, Error: 3 }
 const COLOR: Record<LogLevel, string> = { Debug: 'text-mute', Info: 'text-ink', Warn: 'text-warn', Error: 'text-bad' }
@@ -28,7 +28,12 @@ export default function ConsoleLog({ entries, onClear }: { entries: LogEntry[]; 
   return (
     <section className="relative flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <h2 className="text-[15px] font-semibold">Console Log</h2>
+        <h2 className="text-[15px] font-semibold">
+          Console Log
+          <HelpTip title="Console Log">
+            A live feed of what the app is doing: OBS events, decisions and camera clicks. Red lines are errors. Choose how much detail to show, Copy to paste it somewhere, or Clear to empty this view (the files are kept).
+          </HelpTip>
+        </h2>
         <div className="flex items-center gap-2">
           <select value={level} onChange={(e) => setLevel(e.target.value as LogLevel)} className="rounded-md border border-line bg-bg px-2 py-1 text-xs">
             <option value="Debug">Debug (everything)</option>

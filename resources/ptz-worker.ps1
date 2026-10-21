@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 ================================================================================
- ptz-worker.ps1  -  resident EMEET click helper for OBS Master Controller
+ ptz-worker.ps1  -  resident EMEET click helper for EMEET–OBS Bridge
  Derived from the proven EMEET-Background.ps1 (same Win32 window handling and
  PostMessage background clicks), but started ONCE and kept running, so a click
  happens ~tens of ms after the command instead of 3-7 s (no per-click startup).

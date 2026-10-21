@@ -18,6 +18,13 @@ const api: Api = {
   exportDiagnostics: () => ipcRenderer.invoke(IPC.exportDiagnostics),
   browseFile: (title, extensions) => ipcRenderer.invoke(IPC.browseFile, title, extensions),
   clearLogView: () => ipcRenderer.invoke(IPC.clearLogsView),
+  getLaunchInfo: () => ipcRenderer.invoke(IPC.getLaunchInfo),
+  ackLaunchInfo: () => ipcRenderer.invoke(IPC.ackLaunchInfo),
+  onOpenHelp: (cb) => {
+    const h = (_: unknown, t: string) => cb(t)
+    ipcRenderer.on(IPC.openHelp, h)
+    return () => ipcRenderer.removeListener(IPC.openHelp, h)
+  },
   onState: (cb) => {
     const h = (_: unknown, s: any) => cb(s)
     ipcRenderer.on(IPC.state, h)

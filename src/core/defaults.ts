@@ -41,8 +41,8 @@ export function defaultConfig(): AppConfig {
     ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false },
     tracking: {
       enabled: false,
-      enableClick: null,
-      disableClick: null,
+      enableClick: { x: 1071, y: 315 },
+      disableClick: { x: 954, y: 315 },
       assumeInitiallyOn: false,
       delayAfterPresetMs: 500
     },

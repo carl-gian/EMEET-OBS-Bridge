@@ -1,3 +1,4 @@
+import type { LaunchInfo } from './changelog'
 import type { AppConfig, AppState, DiagnosticsResult, LogEntry } from './types'
 
 /** What the UI can ask the main process to do (exposed as window.api by the preload script). */
@@ -17,6 +18,9 @@ export interface Api {
   exportDiagnostics(): Promise<DiagnosticsResult>
   browseFile(title: string, extensions: string[]): Promise<string | null>
   clearLogView(): Promise<void>
+  getLaunchInfo(): Promise<LaunchInfo>
+  ackLaunchInfo(): Promise<void>
+  onOpenHelp(cb: (topic: string) => void): () => void
   onState(cb: (s: AppState) => void): () => void
   onLog(cb: (e: LogEntry) => void): () => void
   onConfig(cb: (c: AppConfig) => void): () => void

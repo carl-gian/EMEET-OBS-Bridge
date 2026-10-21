@@ -14,11 +14,17 @@ import { ObsClient } from './obsClient'
 import { buildDiagnosticsZip } from './diagnostics'
 import { startDock } from './dock'
 import { Updater } from './updater'
+import { launchInfo } from '@shared/changelog'
+import { readLastSeenVersion, writeLastSeenVersion } from './appState'
 
 const isWin = process.platform === 'win32'
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+
+// The app was renamed; keep using the original data folder so existing settings and logs carry over.
+// (Must run before the single-instance lock, which is keyed to this folder.)
+app.setPath('userData', join(app.getPath('appData'), 'OBS Master Controller'))
 
 // ---------------------------------------------------------------- single instance ----
 if (!app.requestSingleInstanceLock()) {
@@ -46,7 +52,7 @@ function createWindow(startHidden: boolean) {
     minWidth: 980,
     minHeight: 600,
     show: false,
-    title: 'OBS Master Controller',
+    title: 'EMEET–OBS Bridge',
     backgroundColor: '#0f1115',
     autoHideMenuBar: true,
     icon: existsSync(iconPath()) ? iconPath() : undefined,
@@ -95,7 +101,7 @@ function main() {
   log.info(`Config file: ${store.path}`)
   const c0 = store.get()
   log.info(
-    `Settings: OBS ws://${c0.obs.host}:${c0.obs.port} | intra '${c0.transitions.intraGroup.name}' ${c0.transitions.intraGroup.durationMs} ms | cross '${c0.transitions.crossGroup.name}' ${c0.transitions.crossGroup.durationMs} ms | mode ${c0.transitions.crossGroupMode} | click offset ${c0.ptz.fireOffsetMs} ms | tracking ${c0.tracking.enabled ? 'on' : 'off'}`
+    `Settings: OBS ws://${c0.obs.host}:${c0.obs.port} | intra '${c0.transitions.intraGroup.name}' ${c0.transitions.intraGroup.durationMs} ms | cross '${c0.transitions.crossGroup.name}' ${c0.transitions.crossGroup.durationMs} ms | mode ${c0.transitions.crossGroupMode} | click offset ${c0.ptz.fireOffsetMs} ms`
   )
   // "Start with Windows" was removed: clear any startup entry an earlier build may have registered.
   if (app.isPackaged && isWin) {
@@ -153,7 +159,10 @@ function main() {
 
   const updater = new Updater(log)
   updater.onChange = () => updateTray()
-  createWindow(c0.general.startHidden)
+  // First run, or first run after an update with release notes: show the window even if "start hidden" is on.
+  const launch = launchInfo(readLastSeenVersion(), version)
+  log.info(`Launch: ${launch.kind}${launch.from ? ` (previously ${launch.from})` : ''}`)
+  createWindow(c0.general.startHidden && launch.kind === 'normal')
   createTray()
   const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow })
 
@@ -169,6 +178,8 @@ function main() {
     win?.webContents.send('config:push', cfg)
   }
   store.watchFile()
+  // A normal launch needs no acknowledgement, but remember the version so the next update can say what changed.
+  if (launch.kind === 'normal' && launch.from !== version) writeLastSeenVersion(version)
 
   // ------------------------------------------------------------------ tray ----
   function createTray() {
@@ -181,13 +192,20 @@ function main() {
   function updateTray() {
     if (!tray) return
     const st = obs.status === 'connected' ? 'Connected to OBS' : obs.status === 'connecting' ? 'Connecting to OBS ...' : 'OBS not connected'
-    tray.setToolTip(`OBS Master Controller ${version} - ${st}`)
+    tray.setToolTip(`EMEET–OBS Bridge ${version} - ${st}`)
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: `OBS Master Controller ${version}`, enabled: false },
+        { label: `EMEET–OBS Bridge ${version}`, enabled: false },
         { label: st + (controller.dryRun ? '  (DRY RUN)' : ''), enabled: false },
         { type: 'separator' },
         { label: 'Show window', click: showWindow },
+        {
+          label: 'Help',
+          click: () => {
+            showWindow()
+            win?.webContents.send(IPC.openHelp, 'start')
+          }
+        },
         { label: 'Resync camera', click: () => controller.resyncPtz() },
         { type: 'separator' },
         updater.status === 'ready'
@@ -206,8 +224,8 @@ function main() {
   async function confirmQuit() {
     const r = await dialog.showMessageBox({
       type: 'warning',
-      title: 'Quit OBS Master Controller?',
-      message: 'Quit OBS Master Controller?',
+      title: 'Quit EMEET–OBS Bridge?',
+      message: 'Quit EMEET–OBS Bridge?',
       detail: 'Camera presets and transitions will stop following your scenes until you start the app again. Closing the window (X) keeps it running in the tray.',
       buttons: ['Keep running', 'Quit'],
       defaultId: 0,
@@ -221,7 +239,7 @@ function main() {
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
     const r = await dialog.showSaveDialog({
       title: 'Save diagnostics zip',
-      defaultPath: join(app.getPath('desktop'), `OBS-Master-Controller-diagnostics-${stamp}.zip`),
+      defaultPath: join(app.getPath('desktop'), `EMEET-OBS-Bridge-diagnostics-${stamp}.zip`),
       filters: [{ name: 'Zip', extensions: ['zip'] }]
     })
     if (r.canceled || !r.filePath) return { ok: false }
@@ -337,6 +355,8 @@ function main() {
   ipcMain.handle(IPC.openLogs, () => shell.openPath(logDir))
   ipcMain.handle(IPC.exportDiagnostics, () => exportDiagnostics())
   ipcMain.handle(IPC.clearLogsView, () => logger.clearView())
+  ipcMain.handle(IPC.getLaunchInfo, () => launch)
+  ipcMain.handle(IPC.ackLaunchInfo, () => writeLastSeenVersion(version))
   ipcMain.handle(IPC.browseFile, async (_e, title: string, extensions: string[]) => {
     const r = await dialog.showOpenDialog(win!, { title, properties: ['openFile'], filters: [{ name: 'Files', extensions }] })
     return r.canceled ? null : r.filePaths[0]

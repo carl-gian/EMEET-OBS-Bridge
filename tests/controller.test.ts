@@ -159,7 +159,7 @@ describe('Controller - Fast Mode', () => {
 })
 
 describe('Tracking', () => {
-  it('per-scene tracking: ON clicked after the preset click, OFF when leaving, nothing when master is off', async () => {
+  it('per-scene tracking: ON clicked after the preset click, OFF when leaving, nothing extra when no scene wants it', async () => {
     const t = setup((c) => {
       c.tracking.enabled = true
       c.tracking.enableClick = { x: 10, y: 20 }
@@ -172,15 +172,16 @@ describe('Tracking', () => {
     expect(t.sent[0].clicks.map((k) => [k.x, k.y, k.delayMs ?? 0])).toEqual([[1025, 764, 0], [10, 20, 500]])
     t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: TABLE })
     expect(t.sent[1].clicks.map((k) => [k.x, k.y])).toEqual([[1119, 765], [30, 40]])
-    t.cfg.tracking.enabled = false
+    t.cfg.sceneTracking = {}
     t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
-    expect(t.sent[2].clicks).toHaveLength(1) // preset only
+    expect(t.sent[2].clicks).toHaveLength(1) // no scene wants tracking and it is already off: preset only
   })
 
   it('same-preset scenes still switch tracking', async () => {
     const t = setup((c) => {
       c.tracking.enabled = true
       c.tracking.enableClick = { x: 10, y: 20 } // toggle button (no separate disable)
+      c.tracking.disableClick = null
       c.sceneTracking = { [CLOSE]: true }
     })
     await t.c.initSession()

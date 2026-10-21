@@ -161,5 +161,8 @@ export const IPC = {
   openLogs: 'app:open-logs',
   exportDiagnostics: 'app:export-diagnostics',
   browseFile: 'app:browse-file',
-  clearLogsView: 'log:clear'
+  clearLogsView: 'log:clear',
+  getLaunchInfo: 'app:launch-info',
+  ackLaunchInfo: 'app:launch-ack',
+  openHelp: 'ui:open-help'
 } as const
