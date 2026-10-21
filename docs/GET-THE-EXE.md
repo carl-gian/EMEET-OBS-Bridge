@@ -10,7 +10,7 @@ GitHub's free Windows computers build the installer for you.
 3. In GitHub Desktop: **File > Add local repository...** and choose this project folder
    ("Project New Emeet Partner Program").
    - It will say "this directory does not appear to be a Git repository" - click **create a repository**.
-   - Name: `obs-master-controller`. Leave the rest. Click **Create repository**.
+   - Name: `EMEET-OBS-Bridge`. Leave the rest. Click **Create repository**.
 4. Click **Publish repository**. **Tick "Keep this code private"**. Click Publish.
    - The folders `Legacy`, `meeting-media-manager-master` and `obs-transition-table-master` are
      NOT uploaded on purpose (your old config holds your OBS password).
