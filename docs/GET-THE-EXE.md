@@ -22,8 +22,8 @@ GitHub's free Windows computers build the installer for you.
 3. Click **Build Windows installer** (left), then **Run workflow** > **Run workflow** (green).
    (It also starts by itself after every push.)
 4. Wait about 3-5 minutes until the circle turns into a green tick. Click the run.
-5. At the bottom, under **Artifacts**, click **OBS-Master-Controller-Setup** to download a zip.
-6. Unzip it and double-click `OBS Master Controller-Setup-x.y.z.exe`.
+5. At the bottom, under **Artifacts**, click **EMEET-OBS-Bridge-Setup** to download a zip.
+6. Unzip it and double-click `EMEET-OBS-Bridge-Setup-x.y.z.exe`.
    - Windows shows "Windows protected your PC": click **More info**, then **Run anyway** (the app isn't code-signed).
 7. Finish the installer. The app opens; its icon sits in the tray (bottom-right, maybe under the ^ arrow).
 

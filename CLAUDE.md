@@ -1,4 +1,4 @@
-# CLAUDE.md — OBS Master Controller (Electron port)
+# CLAUDE.md — EMEET–OBS Bridge (Electron port)
 
 Project brief for Claude Code. This repo is the **Electron/TypeScript rewrite** of a working PowerShell tool
 (`OBS-Master-Controller.ps1` + `EMEET-Background.ps1`) that automates OBS Studio transitions and an EMEET PTZ camera

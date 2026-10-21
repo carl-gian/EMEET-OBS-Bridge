@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { AppConfig, AppState, LogEntry } from '@shared/types'
+import type { LaunchInfo } from '@shared/changelog'
 import SceneManager from './components/SceneManager'
 import ConsoleLog from './components/ConsoleLog'
 import SettingsModal from './components/SettingsModal'
-import { Button, Pill } from './components/ui'
+import HelpGuide from './components/HelpGuide'
+import { Button, HelpTip, Pill } from './components/ui'
 
 const SEAMLESS_LABEL: Record<string, string> = {
   Armed: 'armed - press Transition',
@@ -26,6 +28,35 @@ export default function App() {
   const [cfg, setCfg] = useState<AppConfig | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpTopic, setHelpTopic] = useState<string | null>(null)
+  const [launch, setLaunch] = useState<LaunchInfo | null>(null)
+  const openHelp = (topic = 'start') => setHelpTopic(topic)
+  const closeHelp = () => {
+    setHelpTopic(null)
+    if (launch && launch.kind !== 'normal') {
+      void window.api.ackLaunchInfo()
+      setLaunch(null)
+    }
+  }
+  // First run: welcome help. First run after an update: What's new.
+  useEffect(() => {
+    void window.api.getLaunchInfo().then((l) => {
+      setLaunch(l)
+      if (l.kind === 'first-run') setHelpTopic('start')
+      else if (l.kind === 'updated') setHelpTopic('whatsnew')
+    })
+    return window.api.onOpenHelp((t) => setHelpTopic(t || 'start'))
+  }, [])
+  useEffect(() => {
+    const f1 = (e: KeyboardEvent) => {
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setHelpTopic((t) => t ?? 'start')
+      }
+    }
+    document.addEventListener('keydown', f1)
+    return () => document.removeEventListener('keydown', f1)
+  }, [])
   const [toast, setToast] = useState('')
   const [resyncSent, setResyncSent] = useState(false)
 
@@ -75,7 +106,7 @@ export default function App() {
     <div className="flex h-full flex-col gap-3 p-3">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-panel px-4 py-2.5">
         <div className="mr-2">
-          <div className="text-[15px] font-semibold leading-tight">OBS Master Controller</div>
+          <div className="text-[15px] font-semibold leading-tight">EMEET–OBS Bridge</div>
           <div className="text-[11px] text-mute">build {state.version}</div>
         </div>
         <Pill tone={obsTone}>
@@ -97,9 +128,15 @@ export default function App() {
             <CameraIcon />
             {resyncSent ? 'Sent ✓' : 'Resync camera'}
           </button>
+          <HelpTip title="Resync camera" align="right">
+            Clicks the camera preset of the scene that is live right now. Use it if the camera is not pointing where that scene expects, for example after someone moved it by hand.
+          </HelpTip>
           <Button kind="ghost" onClick={() => window.api.openLogs()}>
             Open logs
           </Button>
+          <HelpTip title="Open logs" align="right">
+            Opens the folder with the log files. They record every decision and camera click, which helps explain what happened.
+          </HelpTip>
           <Button
             kind="ghost"
             onClick={async () => {
@@ -110,7 +147,16 @@ export default function App() {
           >
             Export diagnostics
           </Button>
+          <HelpTip title="Export diagnostics" align="right">
+            Saves one zip with logs, settings (the OBS password is removed) and versions. Send it when something is not working.
+          </HelpTip>
           <Button onClick={() => setSettingsOpen(true)}>Settings</Button>
+          <HelpTip title="Settings" align="right">
+            OBS connection, transitions, camera preset positions (and how to add more presets), tracking buttons and start-up options.
+          </HelpTip>
+          <Button kind="primary" onClick={() => openHelp()} title="Open the help guide (F1)">
+            Help
+          </Button>
         </div>
       </header>
 
@@ -127,7 +173,7 @@ export default function App() {
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="grid gap-3 lg:h-full lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]">
           <div className="h-[460px] min-h-0 lg:h-full">
-            <SceneManager state={state} cfg={cfg} onCfg={setCfg} />
+            <SceneManager state={state} cfg={cfg} onCfg={setCfg} onHelp={openHelp} />
           </div>
           <div className="h-[460px] min-h-0 lg:h-full">
             <ConsoleLog
@@ -142,7 +188,8 @@ export default function App() {
       </main>
 
       {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-line bg-panel2 px-4 py-2 text-sm shadow-lg">{toast}</div>}
-      {settingsOpen && <SettingsModal cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
+      {helpTopic && <HelpGuide key={helpTopic} initial={helpTopic} since={launch?.kind === 'updated' ? launch.from : null} onClose={closeHelp} />}
+      {settingsOpen && <SettingsModal onHelp={openHelp} cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
     </div>
   )
 }

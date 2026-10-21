@@ -1,5 +1,5 @@
 appId: com.gi.obsmastercontroller
-productName: OBS Master Controller
+productName: EMEET–OBS Bridge
 directories:
   buildResources: build
   output: release
@@ -23,11 +23,11 @@ win:
     - target: nsis
       arch: [x64]
   icon: build/icon.ico
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: EMEET-OBS-Bridge-Setup-${version}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: OBS Master Controller
+  shortcutName: EMEET–OBS Bridge

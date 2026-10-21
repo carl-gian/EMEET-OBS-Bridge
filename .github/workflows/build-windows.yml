@@ -20,6 +20,6 @@ jobs:
       - run: npm run dist:win
       - uses: actions/upload-artifact@v4
         with:
-          name: OBS-Master-Controller-Setup
+          name: EMEET-OBS-Bridge-Setup
           path: release/*.exe
           if-no-files-found: error

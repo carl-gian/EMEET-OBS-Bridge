@@ -1,4 +1,4 @@
-# OBS Master Controller
+# EMEET–OBS Bridge
 
 A Windows tray app for live, Zoom-based meeting productions. It watches **OBS Studio** and, whenever the operator switches
 to a scene that needs a different camera angle, it presses the matching **preset button in EMEET Studio** for the PTZ camera,
@@ -28,7 +28,7 @@ at the right moment during the transition, without ever stealing focus from the 
 ## How it works
 
 ```
- OBS Studio  --obs-websocket v5 (ws://localhost:4455)-->  OBS Master Controller  --background mouse clicks-->  EMEET Studio  -->  PTZ camera
+ OBS Studio  --obs-websocket v5 (ws://localhost:4455)-->  EMEET–OBS Bridge  --background mouse clicks-->  EMEET Studio  -->  PTZ camera
  (Studio Mode)  <---- sets the transition to use ------                (tray app)
 ```
 

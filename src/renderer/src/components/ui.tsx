@@ -99,7 +99,7 @@ export function Select({ value, onChange, children, className = '' }: { value: s
 }
 
 /** A small "?" button that opens an explanation bubble (click to open/close, Esc or clicking elsewhere closes it). */
-export function HelpTip({ title, children }: { title: string; children: ReactNode }) {
+export function HelpTip({ title, children, align = 'left' }: { title: string; children: ReactNode; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -125,7 +125,7 @@ export function HelpTip({ title, children }: { title: string; children: ReactNod
         ?
       </button>
       {open && (
-        <span role="dialog" className="absolute left-0 top-7 z-50 w-[340px] max-w-[80vw] rounded-lg border border-line bg-panel2 p-3 text-left text-xs font-normal leading-relaxed text-ink shadow-xl">
+        <span role="dialog" className={`absolute top-7 z-50 w-[340px] max-w-[80vw] rounded-lg border border-line bg-panel2 p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
           <span className="mb-1 block text-[13px] font-semibold">{title}</span>
           {children}
         </span>

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { AppConfig, AppState } from '@shared/types'
 import { normalizeSceneKey } from '@shared/scene'
 import { presetNumber } from '@shared/presets'
-import { Pill, Switch } from './ui'
+import { HelpTip, Pill, Switch } from './ui'
 
 interface Row {
   name: string // exact OBS name (or the saved name when OBS doesn't have it)
@@ -11,7 +11,7 @@ interface Row {
   tracking: boolean
 }
 
-export default function SceneManager({ state, cfg, onCfg }: { state: AppState; cfg: AppConfig; onCfg: (c: AppConfig) => void }) {
+export default function SceneManager({ state, cfg, onCfg, onHelp }: { state: AppState; cfg: AppConfig; onCfg: (c: AppConfig) => void; onHelp: (topic: string) => void }) {
   const rows = useMemo<Row[]>(() => {
     const lookup = <T,>(rec: Record<string, T>, name: string): T | undefined => {
       if (name in rec) return rec[name]
@@ -38,6 +38,7 @@ export default function SceneManager({ state, cfg, onCfg }: { state: AppState; c
   const allIds = Object.keys(cfg.presets).sort((a, b) => presetNumber(a) - presetNumber(b))
   const shownIds = allIds.filter((id) => presetNumber(id) <= cfg.presetCount)
   const connected = state.obs.status === 'connected'
+  const unset = rows.filter((r) => r.inObs && !r.preset).length
   const isProgram = (n: string) => normalizeSceneKey(n) === normalizeSceneKey(state.program)
   const isPreview = (n: string) => normalizeSceneKey(n) === normalizeSceneKey(state.preview) && !isProgram(n)
 
@@ -50,25 +51,32 @@ export default function SceneManager({ state, cfg, onCfg }: { state: AppState; c
             {connected ? `${state.scenes.length} scenes from OBS` : 'Not connected to OBS - showing your saved scenes'}
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Switch
-            checked={cfg.tracking.enabled}
-            onChange={async (v) => onCfg(await window.api.setTrackingEnabled(v))}
-            label={<span className="font-medium">Enable Tracking</span>}
-          />
-        </div>
       </div>
-      {cfg.tracking.enabled && !cfg.tracking.enableClick && (
-        <div className="mx-4 mt-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
-          Tracking is on, but the tracking button coordinates are not set yet. Set them in Settings &gt; Camera.
+
+      {connected && unset > 0 && (
+        <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+          <span>
+            {unset} scene{unset > 1 ? 's have' : ' has'} no camera preset yet, so the camera will not move for {unset > 1 ? 'them' : 'it'}.
+          </span>
+          <button onClick={() => onHelp('preset')} className="shrink-0 rounded-md border border-warn/60 px-2 py-1 font-semibold hover:bg-warn/20">
+            Show me how
+          </button>
         </div>
       )}
 
       <div className="grid grid-cols-[1fr_190px_80px] gap-3 border-b border-line px-4 py-2 text-xs uppercase tracking-wide text-mute">
         <div>OBS scene</div>
-        <div>Camera preset</div>
+        <div>
+          Camera preset
+          <HelpTip title="Camera preset">
+            Scenes with the same preset share one camera angle, so switching between them never moves the camera. Need more presets than are listed? Settings &gt; Camera &gt; Edit presets &gt; Add preset.
+          </HelpTip>
+        </div>
         <div className="text-center" title="Turn EMEET tracking on while this scene is live">
           Tracking
+          <HelpTip title="Tracking" align="right">
+            Tick to turn EMEET auto-tracking on when this scene goes live. Unticked scenes turn it off.
+          </HelpTip>
         </div>
       </div>
 
@@ -103,8 +111,7 @@ export default function SceneManager({ state, cfg, onCfg }: { state: AppState; c
                 type="checkbox"
                 className="h-4 w-4 accent-[var(--color-accent)]"
                 checked={r.tracking}
-                disabled={!cfg.tracking.enabled}
-                title={cfg.tracking.enabled ? 'Click the tracking button when this scene goes live' : 'Turn on "Enable Tracking" first'}
+                title="Turn EMEET tracking on when this scene goes live"
                 onChange={async (e) => onCfg(await window.api.setSceneTracking(r.name, e.target.checked))}
               />
             </div>

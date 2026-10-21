@@ -14,7 +14,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'camera', label: 'Camera' }
 ]
 
-export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: AppConfig; dryRun: boolean; onClose: () => void; onSaved: (c: AppConfig) => void }) {
+const TAB_HELP: Record<Tab, string> = { general: 'app', obs: 'dock', transitions: 'transitions', camera: 'more' }
+
+export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }: { cfg: AppConfig; dryRun: boolean; onClose: () => void; onSaved: (c: AppConfig) => void; onHelp: (topic: string) => void }) {
   const [tab, setTab] = useState<Tab>('general')
   const [d, setD] = useState<AppConfig>(() => JSON.parse(JSON.stringify(cfg)))
   const [showPw, setShowPw] = useState(false)
@@ -63,9 +65,14 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: 
       <div className="flex h-[min(760px,100%)] w-[min(860px,100%)] flex-col rounded-xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold">Settings</h2>
-          <Button kind="ghost" onClick={onClose}>
-            ✕
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button kind="ghost" onClick={() => onHelp(TAB_HELP[tab])} title="Open the help topic for this tab">
+              ? Help with this tab
+            </Button>
+            <Button kind="ghost" onClick={onClose}>
+              ✕
+            </Button>
+          </div>
         </div>
         <div className="flex gap-1 border-b border-line px-4">
           {TABS.map((t) => (
@@ -369,6 +376,9 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: 
                       >
                         Add preset {d.presetCount < MAX_PRESETS ? d.presetCount + 1 : ''}
                       </Button>
+                      <HelpTip title="Add preset">
+                        Shows the next preset (up to 8) in every scene's drop-down. Its click position is preloaded; check it with Test click, then Save.
+                      </HelpTip>
                       <Button
                         disabled={d.presetCount <= MIN_PRESETS}
                         onClick={() => {
