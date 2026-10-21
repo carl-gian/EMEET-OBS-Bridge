@@ -9,6 +9,9 @@ at the right moment during the transition, without ever stealing focus from the 
 > layout were measured on a 1080p screen. Other resolutions or display-scaling settings can make clicks miss their buttons
 > (see [Screen resolution](#screen-resolution-1080p)). Windows 10/11 x64 only.
 
+> **Made with AI.** This program was written with the help of AI (Claude, by Anthropic), working from my own specification
+> and tested by me on a real production setup. It is provided as is; please test it on your own rig before relying on it in a live meeting.
+
 ---
 
 ## Contents
@@ -185,6 +188,7 @@ installs the next time the app is quit). Publishing steps for the maintainer: `d
 
 ## For developers
 
+- Built with the assistance of AI (Claude, by Anthropic); the behaviour spec is in `CLAUDE.md`.
 - Stack: Electron + TypeScript + React; `obs-websocket-js` for OBS; a resident `powershell.exe` helper (`resources/ptz-worker.ps1`) for Win32 clicks.
 - `npm install`, `npm run dev` (camera clicks are mocked on macOS), `npm test`, `npm run typecheck`
 - Try without OBS: `npm run fake-obs` in a second terminal (fake OBS on ws://localhost:4455, no password)
