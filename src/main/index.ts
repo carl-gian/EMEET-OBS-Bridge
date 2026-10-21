@@ -12,6 +12,7 @@ import { ConfigStore } from './configStore'
 import { MockDriver, PowerShellDriver, workerScriptPath, type EmeetDriver } from './emeetDriver'
 import { ObsClient } from './obsClient'
 import { buildDiagnosticsZip } from './diagnostics'
+import { startDock } from './dock'
 
 const isWin = process.platform === 'win32'
 let win: BrowserWindow | null = null
@@ -151,6 +152,7 @@ function main() {
 
   createWindow()
   createTray()
+  const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow })
 
   // ---- start everything ----
   driver.start(c0.emeet)
@@ -362,6 +364,7 @@ function main() {
     quitting = true
     log.info('Shutting down ...')
     controller.dispose()
+    dock.close()
     obs.stop()
     driver.stop()
     store.close()
