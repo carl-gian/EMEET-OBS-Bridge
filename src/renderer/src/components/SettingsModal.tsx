@@ -3,6 +3,9 @@ import type { AppConfig, Point } from '@shared/types'
 import { DEFAULT_PRESETS, MAX_PRESETS, MIN_PRESETS, presetNumber } from '@shared/presets'
 import { Button, Field, HelpTip, NumInput, Select, Switch, TextInput } from './ui'
 
+const DOCK_NAME = 'EMEET Partner'
+const DOCK_URL = 'http://127.0.0.1:4577/dock'
+
 type Tab = 'general' | 'obs' | 'transitions' | 'camera'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -31,6 +34,17 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: 
     const saved = await window.api.saveConfig(d)
     onSaved(saved)
     onClose()
+  }
+
+  const [copied, setCopied] = useState<'name' | 'url' | null>(null)
+  const copyText = async (text: string, which: 'name' | 'url') => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(which)
+      setTimeout(() => setCopied(null), 1500)
+    } catch {
+      /* clipboard blocked: the box is selectable, so the user can copy by hand */
+    }
   }
 
   const browse = async (title: string, ext: string[], set: (p: string) => void) => {
@@ -83,6 +97,9 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: 
               </Field>
               <div className="mb-5">
                 <Switch checked={d.general.launchObsOnStart} onChange={(v) => edit((c) => (c.general.launchObsOnStart = v))} label="Open OBS when this app starts (if it is not already running)" />
+              </div>
+              <div className="mb-5">
+                <Switch checked={d.general.startHidden} onChange={(v) => edit((c) => (c.general.startHidden = v))} label="Hide in the tray when this app starts" />
               </div>
               <Field label="Log detail" hint="Debug records every OBS event and click - best while we are testing. Logs are in the logs folder (Open logs).">
                 <Select value={d.logging.level} onChange={(v) => edit((c) => (c.logging.level = v as AppConfig['logging']['level']))} className="w-56">
@@ -146,6 +163,26 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: 
                 </Field>
               </div>
               <p className="text-xs text-mute">Saving reconnects to OBS right away. The app keeps retrying by itself if OBS is closed.</p>
+
+              <div className="mt-6 border-t border-line pt-4">
+                <div className="mb-1 text-sm font-semibold">EMEET Partner dock for OBS</div>
+                <p className="mb-3 text-xs text-mute">
+                  Shows status and Resync / Configure buttons inside OBS. In OBS: <b>Docks &gt; Custom Browser Docks...</b>, paste the name and URL below, click <b>Apply</b>, then <b>Close</b>.
+                  This app must be running for the dock to work.
+                </p>
+                <Field label="Dock name">
+                  <div className="flex gap-2">
+                    <TextInput value={DOCK_NAME} onChange={() => {}} mono />
+                    <Button onClick={() => copyText(DOCK_NAME, 'name')}>{copied === 'name' ? 'Copied!' : 'Copy'}</Button>
+                  </div>
+                </Field>
+                <Field label="Dock URL">
+                  <div className="flex gap-2">
+                    <TextInput value={DOCK_URL} onChange={() => {}} mono />
+                    <Button kind="primary" onClick={() => copyText(DOCK_URL, 'url')}>{copied === 'url' ? 'Copied!' : 'Copy'}</Button>
+                  </div>
+                </Field>
+              </div>
             </>
           )}
 

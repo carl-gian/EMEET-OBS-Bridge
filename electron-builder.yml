@@ -12,6 +12,12 @@ extraResources:
     to: ptz-worker.ps1
   - from: resources/icon.ico
     to: icon.ico
+# Auto-update feed: electron-builder uploads latest.yml + installer to a GitHub Release (see docs/RELEASING.md).
+publish:
+  provider: github
+  owner: carl-gian
+  repo: Project-New-Emeet-Partner-Program
+  releaseType: release
 win:
   target:
     - target: nsis

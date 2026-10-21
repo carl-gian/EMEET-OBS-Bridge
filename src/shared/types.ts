@@ -42,6 +42,8 @@ export interface AppConfig {
   general: {
     obsPath: string
     launchObsOnStart: boolean
+    /** Start minimized to the tray instead of showing the window. */
+    startHidden: boolean
   }
   obs: {
     host: string

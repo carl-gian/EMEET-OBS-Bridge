@@ -5,7 +5,7 @@ import { DEFAULT_PRESETS, MIN_PRESETS } from '@shared/presets'
 export function defaultConfig(): AppConfig {
   return {
     configVersion: 2,
-    general: { obsPath: '', launchObsOnStart: false },
+    general: { obsPath: '', launchObsOnStart: false, startHidden: true },
     obs: {
       host: 'localhost',
       port: 4455,
