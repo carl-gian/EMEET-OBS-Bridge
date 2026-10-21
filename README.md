@@ -42,7 +42,7 @@ at the right moment during the transition, without ever stealing focus from the 
 - **Studio Mode must be on** in OBS. The app warns loudly if it is off.
 
 ### Preset groups
-Every OBS scene is assigned to one of the camera presets (Preset 1, 2, 3 ...). Scenes sharing a preset form a **group**:
+Every OBS scene is assigned to one of the EMEET presets (Preset 1, 2, 3 ...). Scenes sharing a preset form a **group**:
 they use the same camera angle. For example: *Stage / Speaker* (close up, full stage, podium...), *Reader*, *Table*.
 A scene that is not assigned to any preset is treated as "same group": it never moves the camera.
 
@@ -71,7 +71,7 @@ and prepares the next one when the transition ends.
 | Situation | What happens |
 |---|---|
 | **Same preset group** (e.g. Close Up to Full Stage) | Plain **Fade**, 1000 ms. The camera is not touched. |
-| **Different preset group**, *Fast Mode* | **Fade to Black** (configurable), 1000 ms. The camera preset is clicked as soon as the transition starts (configurable delay, default 0 ms), so the camera moves while the screen dips to black. |
+| **Different preset group**, *Fast Mode* | **Fade to Black** (configurable), 1000 ms. The EMEET preset is clicked as soon as the transition starts (configurable delay, default 0 ms), so the camera moves while the screen dips to black. |
 | **Different preset group**, *Seamless Mode* | The operator picks the scene in Preview; the app swaps in a black scene. On Transition: 800 ms fade to black, **camera click when that fade ends**, hold 3000 ms for the camera to arrive, then 800 ms fade in to the chosen scene. Nothing of the camera movement is seen. |
 | **Another program** switches the OBS Program scene directly (e.g. Meeting Media Manager), without using Preview | The app clicks the right preset as soon as OBS reports the new Program scene ("quick fire"). OBS reports this up to about 1 s into a 1000 ms fade; that is an OBS limit. |
 | The early guess was wrong (Preview was stale) | The app corrects it immediately with the right preset. |
@@ -91,7 +91,7 @@ in Settings > Camera.
 
 **Automation**
 - Automatic transition selection (Fade within a group, Fade to Black or Seamless between groups), durations editable.
-- Camera preset clicks timed against the transition, with de-duplication, correction of wrong guesses, and quick-fire for external scene changes.
+- EMEET preset clicks timed against the transition, with de-duplication, correction of wrong guesses, and quick-fire for external scene changes.
 - Manual **Resync camera** (tray menu, window button, or the OBS dock) to re-press the current scene's preset.
 - Optional per-scene EMEET tracking on/off.
 - Optionally opens OBS when the app starts (if it is not already running) and starts EMEET Studio when needed.
@@ -101,7 +101,7 @@ in Settings > Camera.
 - **Hides in the tray at startup** (on by default; switch off in Settings > General to open the window at launch).
 - Only one copy can run; starting it again brings the existing window forward.
 - Tray menu: status, show window, resync camera, check for updates / restart to update, open logs folder, export diagnostics, quit (asks to confirm).
-- Main window shows connection status for OBS and the camera, the Program/Preview scenes, the current camera preset, and a live log.
+- Main window shows connection status for OBS and the camera, the Program/Preview scenes, the current EMEET preset, and a live log.
 
 **Scene Manager and settings**
 - Assign each OBS scene to a preset directly from the app; tick Tracking per scene.
@@ -155,9 +155,9 @@ The app clicks the EMEET preset buttons by **screen position**, and moves the EM
 
 1. Install the app (`docs/GET-THE-EXE.md`). Windows may show a SmartScreen warning because the installer is not code-signed; choose "More info > Run anyway".
 2. In **OBS**: Tools > WebSocket Server Settings > enable the server (default port 4455) and set a password. Turn on **Studio Mode**.
-3. In **EMEET Studio**: set up your camera presets (positions) you want to use.
+3. In **EMEET Studio**: set up your EMEET presets (positions) you want to use.
 4. In **this app**: Settings > OBS, enter the address/port/password. Settings > General, set the EMEET Studio and OBS paths if you want them opened automatically.
-5. Assign each scene to a preset in the Scene Manager. Check the camera preset positions in Settings > Camera (and press **Test click**).
+5. Assign each scene to a preset in the Scene Manager. Check the EMEET preset positions in Settings > Camera (and press **Test click**).
 6. Optional: add the dock to OBS (Settings > OBS shows the exact name and URL to paste into *Docks > Custom Browser Docks*).
 7. Run the checks in `docs/TEST-CHECKLIST.md` on the real rig before a meeting.
 

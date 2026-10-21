@@ -93,7 +93,7 @@ const DOCK_HTML = `<!doctype html>
 </style></head><body>
   <div class="row" id="obsRow"><span class="k">OBS</span><span class="v"><span class="dot"></span><span id="obs">...</span></span></div>
   <div class="row" id="camRow"><span class="k">EMEET software</span><span class="v"><span class="dot"></span><span id="cam">...</span></span></div>
-  <div class="row"><span class="k">Camera preset</span><span class="v" id="preset">-</span></div>
+  <div class="row"><span class="k">EMEET preset</span><span class="v" id="preset">-</span></div>
   <div class="row"><span class="k">Program</span><span class="v" id="program" title="">-</span></div>
   <div class="row"><span class="k">Preview</span><span class="v" id="preview" title="">-</span></div>
   <div class="btns">

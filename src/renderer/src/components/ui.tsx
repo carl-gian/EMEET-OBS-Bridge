@@ -120,12 +120,12 @@ export function HelpTip({ title, children, align = 'left' }: { title: string; ch
         aria-label={`What is ${title}?`}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold leading-none ${open ? 'border-accent bg-accent text-white' : 'border-mute text-mute hover:border-accent hover:text-accent'}`}
+        className={`ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[9px] font-bold leading-none ${open ? 'border-accent bg-accent text-white' : 'border-mute text-mute hover:border-accent hover:text-accent'}`}
       >
         ?
       </button>
       {open && (
-        <span role="dialog" className={`absolute top-7 z-50 w-[340px] max-w-[80vw] rounded-lg border border-line bg-panel2 p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
+        <span role="dialog" className={`absolute top-6 z-50 w-[340px] max-w-[80vw] rounded-lg border border-line bg-panel2 p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
           <span className="mb-1 block text-[13px] font-semibold">{title}</span>
           {children}
         </span>

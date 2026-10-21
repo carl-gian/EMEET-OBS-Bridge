@@ -56,7 +56,7 @@ export default function SceneManager({ state, cfg, onCfg, onHelp }: { state: App
       {connected && unset > 0 && (
         <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
           <span>
-            {unset} scene{unset > 1 ? 's have' : ' has'} no camera preset yet, so the camera will not move for {unset > 1 ? 'them' : 'it'}.
+            {unset} scene{unset > 1 ? 's have' : ' has'} no EMEET preset yet, so the camera will not move for {unset > 1 ? 'them' : 'it'}.
           </span>
           <button onClick={() => onHelp('preset')} className="shrink-0 rounded-md border border-warn/60 px-2 py-1 font-semibold hover:bg-warn/20">
             Show me how
@@ -67,8 +67,8 @@ export default function SceneManager({ state, cfg, onCfg, onHelp }: { state: App
       <div className="grid grid-cols-[1fr_190px_80px] gap-3 border-b border-line px-4 py-2 text-xs uppercase tracking-wide text-mute">
         <div>OBS scene</div>
         <div>
-          Camera preset
-          <HelpTip title="Camera preset">
+          EMEET preset
+          <HelpTip title="EMEET preset">
             Scenes with the same preset share one camera angle, so switching between them never moves the camera. Need more presets than are listed? Settings &gt; Camera &gt; Edit presets &gt; Add preset.
           </HelpTip>
         </div>

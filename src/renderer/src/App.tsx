@@ -122,21 +122,21 @@ export default function App() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={resync}
-            title="Click the live scene's camera preset again (use it if the camera is not where the live scene expects)"
+            title="Click the live scene's EMEET preset again (use it if the camera is not where the live scene expects)"
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-semibold text-white shadow-md transition active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${resyncSent ? 'bg-ok' : 'bg-accent hover:brightness-110'}`}
           >
             <CameraIcon />
             {resyncSent ? 'Sent ✓' : 'Resync camera'}
           </button>
           <HelpTip title="Resync camera" align="right">
-            Clicks the camera preset of the scene that is live right now. Use it if the camera is not pointing where that scene expects, for example after someone moved it by hand.
+            Clicks the EMEET preset of the scene that is live right now. Use it if the camera is not pointing where that scene expects, for example after someone moved it by hand.
           </HelpTip>
           <Button kind="ghost" onClick={() => setConsoleOpen((o) => !o)} title="Show or hide the live log of what the app is doing">
             {consoleOpen ? 'Hide console' : 'Open console'}
           </Button>
           <Button onClick={() => setSettingsOpen(true)}>Settings</Button>
           <HelpTip title="Settings" align="right">
-            OBS connection, transitions, camera preset positions (and how to add more presets), tracking buttons and start-up options.
+            OBS connection, transitions, EMEET preset positions (and how to add more presets), tracking buttons and start-up options.
           </HelpTip>
           <Button kind="primary" onClick={() => openHelp()} title="Open the help guide (F1)">
             Help
