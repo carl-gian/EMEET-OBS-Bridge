@@ -28,6 +28,7 @@ export default function App() {
   const [cfg, setCfg] = useState<AppConfig | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [consoleOpen, setConsoleOpen] = useState(false) // hidden at every start
   const [helpTopic, setHelpTopic] = useState<string | null>(null)
   const [launch, setLaunch] = useState<LaunchInfo | null>(null)
   const openHelp = (topic = 'start') => setHelpTopic(topic)
@@ -89,12 +90,12 @@ export default function App() {
   const drvTone = state.camera.driver === 'ready' ? 'ok' : state.camera.driver === 'mock' ? 'mute' : state.camera.driver === 'starting' ? 'warn' : 'bad'
   const drvText =
     state.camera.driver === 'ready'
-      ? `Camera helper ready${state.camera.hwnd ? ` (${state.camera.hwnd})` : ''}`
+      ? 'EMEET software detected'
       : state.camera.driver === 'mock'
-        ? 'Camera: mock (not Windows)'
+        ? 'EMEET check unavailable (not Windows)'
         : state.camera.driver === 'starting'
-          ? 'Camera helper starting ...'
-          : 'Camera helper not running'
+          ? 'Looking for EMEET software ...'
+          : 'EMEET software not detected'
 
   const resync = async () => {
     await window.api.resync()
@@ -115,44 +116,27 @@ export default function App() {
         </Pill>
         {state.obs.status === 'connected' && !state.obs.studioMode && <Pill tone="bad">Studio Mode is OFF</Pill>}
         <Pill tone={drvTone}>{drvText}</Pill>
-        <div className="text-xs text-mute">
-          Camera preset: <span className="text-ink">{state.camera.group ?? 'unknown'}</span> · Tracking: <span className="text-ink">{state.camera.tracking ? 'on' : 'off'}</span>
-          {state.bridgeState !== 'Idle' && <span className="ml-2 text-warn">Seamless: {SEAMLESS_LABEL[state.bridgeState] ?? state.bridgeState}</span>}
-        </div>
+        {state.bridgeState !== 'Idle' && (
+          <div className="text-xs text-warn">Seamless: {SEAMLESS_LABEL[state.bridgeState] ?? state.bridgeState}</div>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={resync}
-            title="Click the live scene's camera preset again (use it if the camera is not where the live scene expects)"
+            title="Click the live scene's EMEET preset again (use it if the camera is not where the live scene expects)"
             className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-semibold text-white shadow-md transition active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${resyncSent ? 'bg-ok' : 'bg-accent hover:brightness-110'}`}
           >
             <CameraIcon />
             {resyncSent ? 'Sent ✓' : 'Resync camera'}
           </button>
           <HelpTip title="Resync camera" align="right">
-            Clicks the camera preset of the scene that is live right now. Use it if the camera is not pointing where that scene expects, for example after someone moved it by hand.
+            Clicks the EMEET preset of the scene that is live right now. Use it if the camera is not pointing where that scene expects, for example after someone moved it by hand.
           </HelpTip>
-          <Button kind="ghost" onClick={() => window.api.openLogs()}>
-            Open logs
+          <Button kind="ghost" onClick={() => setConsoleOpen((o) => !o)} title="Show or hide the live log of what the app is doing">
+            {consoleOpen ? 'Hide console' : 'Open console'}
           </Button>
-          <HelpTip title="Open logs" align="right">
-            Opens the folder with the log files. They record every decision and camera click, which helps explain what happened.
-          </HelpTip>
-          <Button
-            kind="ghost"
-            onClick={async () => {
-              const r = await window.api.exportDiagnostics()
-              if (r.ok) say('Diagnostics saved - send me that zip')
-              else if (r.error) say('Export failed: ' + r.error)
-            }}
-          >
-            Export diagnostics
-          </Button>
-          <HelpTip title="Export diagnostics" align="right">
-            Saves one zip with logs, settings (the OBS password is removed) and versions. Send it when something is not working.
-          </HelpTip>
           <Button onClick={() => setSettingsOpen(true)}>Settings</Button>
           <HelpTip title="Settings" align="right">
-            OBS connection, transitions, camera preset positions (and how to add more presets), tracking buttons and start-up options.
+            OBS connection, transitions, EMEET preset positions (and how to add more presets), tracking buttons and start-up options.
           </HelpTip>
           <Button kind="primary" onClick={() => openHelp()} title="Open the help guide (F1)">
             Help
@@ -171,19 +155,21 @@ export default function App() {
 
       {/* The page scrolls when the window is small; on a big window the two panels fill the height. */}
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-3 lg:h-full lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]">
+        <div className={`grid gap-3 lg:h-full lg:grid-rows-[minmax(0,1fr)] ${consoleOpen ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
           <div className="h-[460px] min-h-0 lg:h-full">
             <SceneManager state={state} cfg={cfg} onCfg={setCfg} onHelp={openHelp} />
           </div>
-          <div className="h-[460px] min-h-0 lg:h-full">
-            <ConsoleLog
-              entries={logs}
-              onClear={() => {
-                setLogs([])
-                void window.api.clearLogView()
-              }}
-            />
-          </div>
+          {consoleOpen && (
+            <div className="h-[460px] min-h-0 lg:h-full">
+              <ConsoleLog
+                entries={logs}
+                onClear={() => {
+                  setLogs([])
+                  void window.api.clearLogView()
+                }}
+              />
+            </div>
+          )}
         </div>
       </main>
 

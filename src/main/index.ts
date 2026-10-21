@@ -226,7 +226,7 @@ function main() {
       type: 'warning',
       title: 'Quit EMEET–OBS Bridge?',
       message: 'Quit EMEET–OBS Bridge?',
-      detail: 'Camera presets and transitions will stop following your scenes until you start the app again. Closing the window (X) keeps it running in the tray.',
+      detail: 'EMEET presets and transitions will stop following your scenes until you start the app again. Closing the window (X) keeps it running in the tray.',
       buttons: ['Keep running', 'Quit'],
       defaultId: 0,
       cancelId: 0,

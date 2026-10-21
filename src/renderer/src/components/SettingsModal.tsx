@@ -137,6 +137,27 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                 </div>
                 <div className="mt-1 text-xs text-mute">Off by default. Takes effect immediately (no need to press Save).</div>
               </div>
+              <div className="mt-5 rounded-lg border border-line p-3">
+                <div className="mb-1 flex items-center text-sm font-medium">
+                  Support
+                  <HelpTip title="Support">
+                    <b>Export diagnostics</b> saves one zip with the logs, your settings (the OBS password is removed) and version numbers. Send it when something is not working.
+                    <b> Open logs folder</b> shows the raw log files.
+                  </HelpTip>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={async () => {
+                      const r = await window.api.exportDiagnostics()
+                      if (r.ok) setMsg('Diagnostics saved. Send that zip when asking for help.')
+                      else if (r.error) setMsg('Export failed: ' + r.error)
+                    }}
+                  >
+                    Export diagnostics ...
+                  </Button>
+                  <Button onClick={() => void window.api.openLogs()}>Open logs folder</Button>
+                </div>
+              </div>
             </>
           )}
 
@@ -196,7 +217,7 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
           {/* -------------------------------------------------- Transition rules */}
           {tab === 'transitions' && (
             <>
-              <Field label="Same preset (intra-group)" hint="Both scenes use the same camera preset. The camera is not touched.">
+              <Field label="Same preset (intra-group)" hint="Both scenes use the same EMEET preset. The camera is not touched.">
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
                     <div className="mb-1 text-xs text-mute">OBS transition name</div>
@@ -209,13 +230,13 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                 </div>
               </Field>
 
-              <Field label="Different preset (cross-group)" hint="The target scene uses a different camera preset, so the camera has to move.">
+              <Field label="Different preset (cross-group)" hint="The target scene uses a different EMEET preset, so the camera has to move.">
                 <div className="mb-3 grid gap-2">
                   <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'fast' ? 'border-accent bg-accent/10' : 'border-line'}`}>
                     <input type="radio" checked={d.transitions.crossGroupMode === 'fast'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'fast'))} />
                     <span>
                       <span className="font-medium">Fast Mode</span>
-                      <span className="block text-xs text-mute">One fade (normally to black). The camera preset is clicked as soon as you press Transition in OBS, so the camera moves while the fade runs.</span>
+                      <span className="block text-xs text-mute">One fade (normally to black). The EMEET preset is clicked as soon as you press Transition in OBS, so the camera moves while the fade runs.</span>
                     </span>
                   </label>
                   <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'seamless' ? 'border-accent bg-accent/10' : 'border-line'}`}>
@@ -223,7 +244,7 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                     <span>
                       <span className="font-medium">Seamless Mode</span>
                       <span className="block text-xs text-mute">
-                        Pick a scene in Preview and the app remembers it. Press Transition: fade to the black scene → camera preset is clicked the moment black is reached → hold on
+                        Pick a scene in Preview and the app remembers it. Press Transition: fade to the black scene → EMEET preset is clicked the moment black is reached → hold on
                         black → fade to the remembered scene. While armed, OBS Preview shows the black scene.
                       </span>
                     </span>
@@ -244,7 +265,7 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                       <div className="mb-1 flex items-center text-xs text-mute">
                         Camera click delay (ms)
                         <HelpTip title="Camera click delay">
-                          How long to wait, after OBS says the transition has started, before the camera preset button is clicked.
+                          How long to wait, after OBS says the transition has started, before the EMEET preset button is clicked.
                           <br />
                           <br />
                           <b>0 = instant</b> (default): the click is sent the moment you press Transition in OBS, before the fade finishes and before the camera has moved.
@@ -290,7 +311,7 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                   <Switch checked={d.behavior.requireStudioMode} onChange={(v) => edit((c) => (c.behavior.requireStudioMode = v))} label="Warn loudly when OBS Studio Mode is off" />
                   <Switch checked={d.behavior.clearSceneTransitionOverridesOnStart} onChange={(v) => edit((c) => (c.behavior.clearSceneTransitionOverridesOnStart = v))} label="Clear per-scene transition overrides when connecting to OBS" />
                   <Switch checked={d.behavior.reprimeOnTransitionEnd} onChange={(v) => edit((c) => (c.behavior.reprimeOnTransitionEnd = v))} label="Prepare the next transition as soon as one ends" />
-                  <Switch checked={d.ptz.syncOnStartup} onChange={(v) => edit((c) => (c.ptz.syncOnStartup = v))} label="Click the live scene's camera preset when connecting to OBS" />
+                  <Switch checked={d.ptz.syncOnStartup} onChange={(v) => edit((c) => (c.ptz.syncOnStartup = v))} label="Click the live scene's EMEET preset when connecting to OBS" />
                   <div>
                     <div className="mb-1 text-xs text-mute">Scenes with no preset behave as</div>
                     <Select value={d.behavior.unknownScenePolicy} onChange={(v) => edit((c) => (c.behavior.unknownScenePolicy = v as 'intra' | 'cross'))} className="w-72">

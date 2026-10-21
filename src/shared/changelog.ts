@@ -13,10 +13,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-10-22',
     items: [
       'Renamed to EMEET–OBS Bridge.',
-      'Fast Mode: the camera preset is clicked the moment a transition starts.',
+      'Fast Mode: the EMEET preset is clicked the moment a transition starts.',
       'Seamless Mode: fade to black, move the camera while the screen is black, then fade to the next scene.',
       'Tracking: tick the Tracking box next to a scene to turn EMEET auto-tracking on for it. The tracking buttons have default positions.',
-      'Camera presets are locked until you press "Edit presets". You can use 3 to 8 presets.',
+      'EMEET presets are locked until you press "Edit presets". You can use 3 to 8 presets.',
       'OBS dock: status, Resync camera and Open settings inside OBS (Settings > OBS shows how to add it).',
       'Automatic updates: new versions download in the background and install only when you choose "Restart to update" in the tray menu.',
       'Help guide (Help button or F1) with animated how-tos, "?" tips next to buttons, and a Help item in the tray menu.',

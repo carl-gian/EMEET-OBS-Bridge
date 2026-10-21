@@ -207,7 +207,8 @@ export class PowerShellDriver implements EmeetDriver {
 
 /** macOS / dev driver: logs what a real click would do. */
 export class MockDriver implements EmeetDriver {
-  status: DriverStatus = 'mock'
+  // OMC_DEMO=1 (developer screenshots only): pretend EMEET Studio was found.
+  status: DriverStatus = process.env['OMC_DEMO'] ? 'ready' : 'mock'
   hwnd = '0xMOCK'
   onStatus?: () => void
   private timers = new Set<ReturnType<typeof setTimeout>>()

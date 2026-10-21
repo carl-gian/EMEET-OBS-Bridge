@@ -79,6 +79,7 @@ const DOCK_HTML = `<!doctype html>
   *{box-sizing:border-box}
   body{margin:0;padding:10px;background:var(--bg);color:var(--text);font:13px/1.35 "Segoe UI",system-ui,sans-serif}
   .row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;background:var(--card);border:1px solid var(--line);border-radius:6px;margin-bottom:6px}
+  [hidden]{display:none!important}
   .k{color:var(--dim)}
   .v{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--dim)}
@@ -91,8 +92,8 @@ const DOCK_HTML = `<!doctype html>
   .dry{background:var(--warn);color:#000;border-radius:4px;padding:1px 6px;font-weight:600;margin-left:6px}
 </style></head><body>
   <div class="row" id="obsRow"><span class="k">OBS</span><span class="v"><span class="dot"></span><span id="obs">...</span></span></div>
-  <div class="row" id="camRow"><span class="k">Camera helper</span><span class="v"><span class="dot"></span><span id="cam">...</span></span></div>
-  <div class="row"><span class="k">Camera preset</span><span class="v" id="preset">-</span></div>
+  <div class="row" id="camRow"><span class="k">EMEET software</span><span class="v"><span class="dot"></span><span id="cam">...</span></span></div>
+  <div class="row"><span class="k">EMEET preset</span><span class="v" id="preset">-</span></div>
   <div class="row"><span class="k">Program</span><span class="v" id="program" title="">-</span></div>
   <div class="row"><span class="k">Preview</span><span class="v" id="preview" title="">-</span></div>
   <div class="btns">
@@ -117,7 +118,7 @@ const DOCK_HTML = `<!doctype html>
       setRow('obsRow', o === 'connected' ? (s.obs.studioMode ? 'ok' : 'warn') : o === 'connecting' ? 'warn' : 'bad')
       if (o === 'connected' && !s.obs.studioMode) $('obs').textContent += ' (Studio Mode off)'
       const d = s.camera.driver
-      $('cam').textContent = d === 'ready' ? 'Ready' : d === 'mock' ? 'Mock' : d === 'starting' ? 'Starting...' : d === 'error' ? 'EMEET not found' : 'Stopped'
+      $('cam').textContent = d === 'ready' ? 'Detected' : d === 'mock' ? 'Not checked (not Windows)' : d === 'starting' ? 'Looking...' : 'Not detected'
       setRow('camRow', d === 'ready' || d === 'mock' ? 'ok' : d === 'starting' ? 'warn' : 'bad')
       setText('preset', s.cameraLabel || 'none yet')
       setText('program', s.program || '-')

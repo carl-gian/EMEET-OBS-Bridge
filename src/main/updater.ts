@@ -79,7 +79,7 @@ export class Updater {
       type: 'question',
       title: 'Update ready',
       message: `Version ${this.availableVersion} is ready to install.`,
-      detail: 'The app will close and restart. Camera presets and transitions pause for a few seconds. Do not do this during a live meeting.',
+      detail: 'The app will close and restart. EMEET presets and transitions pause for a few seconds. Do not do this during a live meeting.',
       buttons: ['Later', 'Restart and update'],
       defaultId: 0,
       cancelId: 0,

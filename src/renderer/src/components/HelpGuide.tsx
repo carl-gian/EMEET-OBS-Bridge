@@ -25,13 +25,13 @@ function Steps({ items }: { items: string[] }) {
   )
 }
 
-/** Animated mock: choose a camera preset for a scene in the Scene Manager. */
+/** Animated mock: choose a EMEET preset for a scene in the Scene Manager. */
 function DemoScenePreset() {
   return (
     <>
       <div className="hg-stage" aria-hidden>
         <div className="hg-abs left-3 top-2 text-[11px] uppercase tracking-wide text-mute">OBS scene</div>
-        <div className="hg-abs left-[250px] top-2 text-[11px] uppercase tracking-wide text-mute">Camera preset</div>
+        <div className="hg-abs left-[250px] top-2 text-[11px] uppercase tracking-wide text-mute">EMEET preset</div>
         <div className="hg-abs left-3 top-[62px] w-[220px] truncate text-[13px]">READER SETUP (Watchtower &amp; CBS)</div>
         <div className="hg-abs left-3 top-[112px] w-[220px] truncate text-[13px] text-mute">TABLE (For Standing)</div>
         <div className="hg-box hg1-flash hg-run" style={{ left: 250, top: 60, width: 160, height: 30 }}>
@@ -48,7 +48,7 @@ function DemoScenePreset() {
         </div>
         <Cursor className="hg1-cursor" />
       </div>
-      <Steps items={['Find the scene in the Scene Manager list.', 'Open its "Camera preset" drop-down.', 'Pick the preset (camera angle) that scene should use. It saves by itself.']} />
+      <Steps items={['Find the scene in the Scene Manager list.', 'Open its "EMEET preset" drop-down.', 'Pick the preset (camera angle) that scene should use. It saves by itself.']} />
     </>
   )
 }
@@ -128,7 +128,7 @@ const TOPICS = (since: string | null): Topic[] => [
         <ul className="mb-3 list-disc space-y-1 pl-5 text-[13px]">
           <li>OBS is open, <b>Studio Mode is on</b>, and the header says "Connected".</li>
           <li>EMEET Studio is open and the header says the camera helper is ready.</li>
-          <li>Every scene has a camera preset chosen in the Scene Manager.</li>
+          <li>Every scene has a EMEET preset chosen in the Scene Manager.</li>
           <li>The screen is <b>1920 x 1080</b> (other resolutions are not supported yet).</li>
         </ul>
         <P>Use the topics on the left. The two animated guides show how to give a scene a preset and how to add more presets.</P>
@@ -157,7 +157,7 @@ const TOPICS = (since: string | null): Topic[] => [
         <P>Scenes that share a preset form a group (the same camera angle).</P>
         <ul className="mb-3 list-disc space-y-1.5 pl-5 text-[13px]">
           <li><b>Same group:</b> a plain 1 s Fade. The camera is not touched.</li>
-          <li><b>Different group, Fast Mode:</b> Fade to Black, and the camera preset is clicked as the transition starts.</li>
+          <li><b>Different group, Fast Mode:</b> Fade to Black, and the EMEET preset is clicked as the transition starts.</li>
           <li><b>Different group, Seamless Mode:</b> fade to a black scene, move the camera while it is black, hold, then fade to your scene. Pick it in Settings &gt; Transition Rules.</li>
           <li><b>Another program changes the scene:</b> the camera is clicked as soon as OBS reports it.</li>
           <li><b>Press Transition when Program and Preview are the same scene:</b> re-clicks that scene's preset (a manual resync).</li>

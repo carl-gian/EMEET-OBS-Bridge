@@ -16,7 +16,7 @@ extraResources:
 publish:
   provider: github
   owner: carl-gian
-  repo: Project-New-Emeet-Partner-Program
+  repo: EMEET-OBS-Bridge
   releaseType: release
 win:
   target:
