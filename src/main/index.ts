@@ -13,6 +13,7 @@ import { MockDriver, PowerShellDriver, workerScriptPath, type EmeetDriver } from
 import { ObsClient } from './obsClient'
 import { buildDiagnosticsZip } from './diagnostics'
 import { startDock } from './dock'
+import { Updater } from './updater'
 
 const isWin = process.platform === 'win32'
 let win: BrowserWindow | null = null
@@ -38,7 +39,7 @@ function showWindow() {
   win.focus()
 }
 
-function createWindow() {
+function createWindow(startHidden: boolean) {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -53,7 +54,7 @@ function createWindow() {
   })
   win.setMenu(null)
   win.once('ready-to-show', () => {
-    win?.show()
+    if (!startHidden) win?.show()
   })
   // Closing OR minimizing hides the window to the tray (it also leaves the taskbar). The tray icon brings it back.
   win.on('close', (e) => {
@@ -150,7 +151,9 @@ function main() {
   }
   logger.onEntry = (e) => win?.webContents.send(IPC.logPush, e)
 
-  createWindow()
+  const updater = new Updater(log)
+  updater.onChange = () => updateTray()
+  createWindow(c0.general.startHidden)
   createTray()
   const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow })
 
@@ -158,6 +161,7 @@ function main() {
   driver.start(c0.emeet)
   if (c0.general.launchObsOnStart) void launchObs(c0)
   obs.start()
+  updater.start()
 
   store.onExternalChange = (cfg) => {
     logger.level = cfg.logging.level
@@ -185,6 +189,10 @@ function main() {
         { type: 'separator' },
         { label: 'Show window', click: showWindow },
         { label: 'Resync camera', click: () => controller.resyncPtz() },
+        { type: 'separator' },
+        updater.status === 'ready'
+          ? { label: `Restart to update to ${updater.availableVersion} ...`, click: () => void updater.promptInstall() }
+          : { label: updater.status === 'downloading' ? `Downloading update ${updater.availableVersion} ...` : 'Check for updates', enabled: updater.status !== 'downloading', click: () => updater.check(true) },
         { type: 'separator' },
         { label: 'Open logs folder', click: () => void shell.openPath(logDir) },
         { label: 'Export diagnostics ...', click: () => void exportDiagnostics() },
@@ -365,6 +373,7 @@ function main() {
     log.info('Shutting down ...')
     controller.dispose()
     dock.close()
+    updater.stop()
     obs.stop()
     driver.stop()
     store.close()
