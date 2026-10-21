@@ -55,6 +55,31 @@ describe('normalizeConfig', () => {
   })
   it('garbage in -> defaults out', () => {
     expect(normalizeConfig(null).config.presets.Preset1.x).toBe(929)
-    expect(normalizeConfig({ ptz: { fireOffsetMs: 'abc' } }).config.ptz.fireOffsetMs).toBe(200)
+    expect(normalizeConfig(null).config.presetCount).toBe(3)
+    expect(normalizeConfig({ ptz: { fireOffsetMs: 'abc' } }).config.ptz.fireOffsetMs).toBe(0)
+  })
+})
+
+describe('config migration', () => {
+  it('shows at least the presets that scenes use, always keeps all 8 coordinates', () => {
+    const { config } = normalizeConfig({ scenes: { A: 'Preset5' }, presets: { Preset1: { label: 'X', x: 1, y: 2 } } })
+    expect(config.presetCount).toBe(5)
+    expect(Object.keys(config.presets)).toHaveLength(8)
+    expect(config.presets.Preset8.x).toBe(1222)
+    expect(config.presets.Preset1.x).toBe(1)
+  })
+  it('old 200 ms offset becomes 0 once; Black Bridge settings become Seamless; removed options vanish', () => {
+    const { config, warnings } = normalizeConfig({
+      ptz: { fireOffsetMs: 200 },
+      transitions: { crossGroupMode: 'blackBridge' },
+      blackBridge: { sceneName: 'BLK', holdMs: 2500 },
+      general: { startWithWindows: true, obsPath: 'C:\\obs.exe' }
+    })
+    expect(config.ptz.fireOffsetMs).toBe(0)
+    expect(warnings.some((w) => /200 ms to 0 ms/.test(w))).toBe(true)
+    expect(config.transitions.crossGroupMode).toBe('seamless')
+    expect(config.seamless).toMatchObject({ sceneName: 'BLK', holdMs: 2500, fadeToBlackMs: 800, fadeInMs: 800 })
+    expect((config.general as any).startWithWindows).toBeUndefined()
+    expect(normalizeConfig({ configVersion: 2, ptz: { fireOffsetMs: 200 } }).config.ptz.fireOffsetMs).toBe(200)
   })
 })

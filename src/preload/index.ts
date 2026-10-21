@@ -17,7 +17,6 @@ const api: Api = {
   openLogs: () => ipcRenderer.invoke(IPC.openLogs),
   exportDiagnostics: () => ipcRenderer.invoke(IPC.exportDiagnostics),
   browseFile: (title, extensions) => ipcRenderer.invoke(IPC.browseFile, title, extensions),
-  importLegacy: () => ipcRenderer.invoke(IPC.importLegacy),
   clearLogView: () => ipcRenderer.invoke(IPC.clearLogsView),
   onState: (cb) => {
     const h = (_: unknown, s: any) => cb(s)

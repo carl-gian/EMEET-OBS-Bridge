@@ -53,8 +53,8 @@ describe('Controller - Fast Mode', () => {
     expect(t.sent).toHaveLength(0)
   })
 
-  it('cross-group: primes Fade to Black, early-fires the camera at +200 ms, confirm does not double-click', async () => {
-    const t = setup()
+  it('cross-group: primes Fade to Black, early-fires the camera at +200 ms when an offset is set, confirm does not double-click', async () => {
+    const t = setup((c) => (c.ptz.fireOffsetMs = 200))
     await t.c.initSession()
     await flush()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
@@ -74,6 +74,16 @@ describe('Controller - Fast Mode', () => {
     t.c.handleEvent('SceneTransitionEnded', { transitionName: 'Fade to Black' })
     await flush()
     expect(t.sent).toHaveLength(1) // dedupe
+  })
+
+  it('default Fast Mode fires immediately (no schedule) as soon as the transition starts', async () => {
+    const t = setup()
+    await t.c.initSession()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade to Black' })
+    expect(t.sent).toHaveLength(1)
+    expect(t.sent[0].presetId).toBe('Preset2')
+    expect(t.sent[0].fireAt).toBeUndefined()
   })
 
   it('intra-group switch never clicks', async () => {
@@ -182,32 +192,41 @@ describe('Tracking', () => {
   })
 })
 
-describe('Controller - Black Bridge', () => {
+describe('Controller - Seamless Mode', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
+  const seamless = (c: AppConfig) => {
+    c.transitions.crossGroupMode = 'seamless'
+  }
 
-  it('arms on a cross-group preview, fades to black, clicks, holds, then fades to the target', async () => {
-    const t = setup((c) => {
-      c.transitions.crossGroupMode = 'blackBridge'
-      c.blackBridge.holdMs = 3000
-    })
+  it('remembers the target, fades to black (800), clicks when black is reached, holds 3 s, fades to the target (800)', async () => {
+    const t = setup(seamless)
     await t.c.initSession()
     await flush()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
     expect(t.c.bridgeState).toBe('Armed')
     await flush()
     expect(t.calls.some((c) => c.type === 'SetCurrentPreviewScene' && c.data.sceneName === BLACK)).toBe(true)
+    const toBlack = t.batches.at(-1)!
+    expect(toBlack[0].requestData.transitionName).toBe('Fade')
+    expect(toBlack[1].requestData.transitionDuration).toBe(800)
 
     t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade' })
     expect(t.c.bridgeState).toBe('FadingToBlack')
-    expect(t.sent).toHaveLength(1)
-    expect(t.sent[0].presetId).toBe('Preset2')
+    expect(t.sent).toHaveLength(0) // no click yet - black not reached
 
     t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: BLACK })
     t.c.handleEvent('SceneTransitionEnded', { transitionName: 'Fade' })
     expect(t.c.bridgeState).toBe('Holding')
-    await vi.advanceTimersByTimeAsync(3000)
+    expect(t.sent).toHaveLength(1) // click right after the fade to black
+    expect(t.sent[0].presetId).toBe('Preset2')
+    expect(t.sent[0].fireAt).toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(t.c.bridgeState).toBe('Holding')
+    await vi.advanceTimersByTimeAsync(1)
     expect(t.c.bridgeState).toBe('FadingIn')
+    expect(t.batches.at(-1)![1].requestData.transitionDuration).toBe(800)
     expect(t.calls.some((c) => c.type === 'TriggerStudioModeTransition')).toBe(true)
 
     t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
@@ -217,10 +236,20 @@ describe('Controller - Black Bridge', () => {
     expect(t.sent).toHaveLength(1) // no second click
   })
 
-  it('falls back to Fast Mode when the BLACK scene is missing in OBS', async () => {
+  it('another program switching the scene while armed cancels seamless (no stray click from it)', async () => {
+    const t = setup(seamless)
+    await t.c.initSession()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade' })
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: TABLE }) // not black
+    expect(t.c.bridgeState).toBe('Idle')
+    expect(t.sent.map((s) => s.presetId)).toEqual(['Preset3']) // only the quick-fire for the real scene
+  })
+
+  it('falls back to Fast Mode when the black scene is missing in OBS', async () => {
     const t = setup((c) => {
-      c.transitions.crossGroupMode = 'blackBridge'
-      c.blackBridge.sceneName = 'NOPE'
+      seamless(c)
+      c.seamless.sceneName = 'NOPE'
     })
     await t.c.initSession()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })

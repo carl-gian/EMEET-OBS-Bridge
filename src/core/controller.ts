@@ -12,7 +12,7 @@ interface Resolved {
 
 /**
  * The decision engine / state machine. A faithful port of the PowerShell controller's event handling
- * (Fast Mode, quick-fire, manual resync, priming) plus the optional Black Bridge mode.
+ * (Fast Mode, quick-fire, manual resync, priming) plus Seamless Mode (fade to a black scene, move the camera, hold, fade to the target).
  * It never touches Electron, the network or Win32 directly - everything goes through `Deps`.
  */
 export class Controller {
@@ -233,14 +233,14 @@ export class Controller {
   }
 
   private bridgeSetup() {
-    const want = this.cfg.transitions.crossGroupMode === 'blackBridge'
-    const bn = this.cfg.blackBridge.sceneName
+    const want = this.cfg.transitions.crossGroupMode === 'seamless'
+    const bn = this.cfg.seamless.sceneName
     this.bridgeSceneName = this.obsScenes.find((s) => normalizeSceneKey(s) === normalizeSceneKey(bn)) ?? null
     this.bridgeActive = want && !!this.bridgeSceneName
     if (want && !this.bridgeActive)
-      this.d.log.error(`Black Bridge mode is selected but OBS has no scene named '${bn}' - create it (a scene with a black Color Source). Falling back to Fast Mode.`)
-    else if (this.bridgeActive) this.d.log.info(`Black Bridge ACTIVE via '${this.bridgeSceneName}'  (hold ${this.cfg.blackBridge.holdMs} ms).`)
-    else this.d.log.info('Cross-group mode: Fast Mode (fade to black with the camera click ~' + this.cfg.ptz.fireOffsetMs + ' ms in).')
+      this.d.log.error(`Seamless Mode is selected but OBS has no scene named '${bn}' - create it (a scene with a black Color Source). Falling back to Fast Mode.`)
+    else if (this.bridgeActive) this.d.log.info(`Seamless Mode ACTIVE via '${this.bridgeSceneName}'  (fade to black ${this.cfg.seamless.fadeToBlackMs} ms, hold ${this.cfg.seamless.holdMs} ms, fade in ${this.cfg.seamless.fadeInMs} ms).`)
+    else this.d.log.info('Cross-group mode: Fast Mode (camera click ' + (this.cfg.ptz.fireOffsetMs > 0 ? this.cfg.ptz.fireOffsetMs + ' ms after the transition starts' : 'immediately when the transition starts') + ').')
     if (!this.bridgeActive) this.resetBridge('bridge not active')
   }
 
@@ -249,7 +249,8 @@ export class Controller {
     return decide(this.cfg, this.groupMap, this.programScene, this.previewScene)
   }
 
-  private intraDecision(origin: string, target: string): Decision {
+  /** Plain fade (the same-preset transition) with its own duration - used for the two Seamless fades. */
+  private intraDecision(origin: string, target: string, durationMs?: number): Decision {
     const t = this.cfg.transitions.intraGroup
     return {
       isCrossGroup: false,
@@ -259,7 +260,7 @@ export class Controller {
       targetGroup: null,
       key: 'intraGroup',
       transitionName: t.name,
-      durationMs: t.durationMs,
+      durationMs: durationMs ?? t.durationMs,
       settings: t.settings
     }
   }
@@ -317,9 +318,9 @@ export class Controller {
     void this.applyTransitionState(dec, reason)
   }
 
-  // ---------------------------------------------------------- Black Bridge ----
+  // ------------------------------------------------------------ Seamless Mode ----
   private resetBridge(why: string) {
-    if (this.bridgeState !== 'Idle') this.d.log.warn(`BRIDGE reset (${why}).`)
+    if (this.bridgeState !== 'Idle') (why === 'complete' ? this.d.log.debug : this.d.log.warn)(`SEAMLESS reset (${why}).`)
     this.bridgeState = 'Idle'
     this.bridgeTarget = null
     if (this.bridgeTimer) clearTimeout(this.bridgeTimer)
@@ -332,10 +333,10 @@ export class Controller {
     this.bridgeState = 'Armed'
     this.bridgeSince = this.now()
     this.d.log.info(
-      `BRIDGE ARMED  '${dec.origin}' -> '${dec.target}' will go via '${black}'  (fade ${this.cfg.transitions.intraGroup.durationMs} ms, hold ${this.cfg.blackBridge.holdMs} ms). Press Transition once.`
+      `SEAMLESS ARMED  remembered target '${dec.target}'; Preview now shows '${black}'. Press Transition once: fade to black ${this.cfg.seamless.fadeToBlackMs} ms -> camera -> hold ${this.cfg.seamless.holdMs} ms -> fade to target ${this.cfg.seamless.fadeInMs} ms.`
     )
     this.previewScene = black
-    void this.applyTransitionState(this.intraDecision(this.programScene, black), 'bridge armed (origin -> black)')
+    void this.applyTransitionState(this.intraDecision(this.programScene, black, this.cfg.seamless.fadeToBlackMs), 'seamless armed (origin -> black)')
     if (!this._dryRun) void this.safeCall('SetCurrentPreviewScene', { sceneName: black })
   }
 
@@ -345,11 +346,11 @@ export class Controller {
     const target = this.bridgeTarget!
     this.bridgeState = 'FadingIn'
     this.bridgeSince = this.now()
-    this.d.log.info(`BRIDGE RELEASE  '${black}' -> '${target}'`)
+    this.d.log.info(`SEAMLESS RELEASE  '${black}' -> '${target}' (fade ${this.cfg.seamless.fadeInMs} ms)`)
     this.programScene = black
     this.previewScene = target
     void (async () => {
-      await this.applyTransitionState(this.intraDecision(black, target), 'bridge release (black -> target)')
+      await this.applyTransitionState(this.intraDecision(black, target, this.cfg.seamless.fadeInMs), 'seamless release (black -> target)')
       if (this._dryRun) {
         this.d.log.info('        (DryRun: would fade to target)')
         this.resetBridge('dry run')
@@ -416,12 +417,12 @@ export class Controller {
     if (['FadingToBlack', 'Holding', 'FadingIn'].includes(this.bridgeState)) {
       if ((this.now() - this.bridgeSince) / 1000 > 30) this.resetBridge('watchdog: stuck > 30 s')
       else {
-        this.d.log.debug(`Preview -> '${scene}' (ignored: black bridge running)`)
+        this.d.log.debug(`Preview -> '${scene}' (ignored: seamless transition running)`)
         return
       }
     }
     if (this.bridgeState === 'Armed' && this.bridgeSceneName && normalizeSceneKey(scene) === normalizeSceneKey(this.bridgeSceneName)) {
-      this.d.log.debug('Preview -> black (bridge armed)')
+      this.d.log.debug('Preview -> black (seamless armed)')
       return
     }
     this.previewScene = scene
@@ -442,7 +443,7 @@ export class Controller {
     if (this.bridgeActive) {
       const bd = decide(this.cfg, this.groupMap, this.programScene, scene)
       if (bd.isCrossGroup) return this.startBridgeArm(bd)
-      if (this.bridgeState === 'Armed') this.resetBridge(`operator picked '${scene}' (same preset as program) - bridge cancelled`)
+      if (this.bridgeState === 'Armed') this.resetBridge(`operator picked '${scene}' (same preset as program) - seamless cancelled`)
     }
     this.primeForCurrentPair(`preview changed to '${scene}'`)
   }
@@ -454,10 +455,7 @@ export class Controller {
     if (this.bridgeState === 'Armed') {
       this.bridgeState = 'FadingToBlack'
       this.bridgeSince = this.now()
-      const fade = this.cfg.transitions.intraGroup.durationMs
-      const tgt = this.bridgeTarget!
-      this.d.log.info(`BRIDGE fading to '${this.bridgeSceneName}' (${fade} ms); camera click for '${this.group(tgt)}' scheduled to land when black is reached.`)
-      this.ptz.invoke(this.group(tgt), tgt, 'black bridge', { fireAt: this.now() + fade })
+      this.d.log.info(`SEAMLESS fading to '${this.bridgeSceneName}' (${this.cfg.seamless.fadeToBlackMs} ms); the camera click for '${this.group(this.bridgeTarget)}' fires the moment black is reached.`)
       this.changed()
       return
     }
@@ -488,7 +486,9 @@ export class Controller {
     if (dec.isCrossGroup && latchOk) {
       this.pendingCrossCheck.earlyGroup = dec.targetGroup
       const off = this.cfg.ptz.fireOffsetMs
-      this.ptz.invoke(dec.targetGroup, dec.target, `early fire at transition start (click at +${off} ms)`, { fireAt: this.now() + off })
+      this.ptz.invoke(dec.targetGroup, dec.target, off > 0 ? `early fire at transition start (click at +${off} ms)` : 'early fire at transition start (immediate)', {
+        fireAt: off > 0 ? this.now() + off : undefined
+      })
     }
     this.d.log.info('        ' + (dec.isCrossGroup ? 'expecting CROSS-GROUP -> PTZ preset once confirmed' : 'expecting INTRA-GROUP, no preset click'))
     this.changed()
@@ -499,16 +499,22 @@ export class Controller {
     this.d.log.debug(`TRANSITION ENDED '${transitionName}'`)
 
     if (this.bridgeState === 'FadingToBlack') {
-      const hold = this.cfg.blackBridge.holdMs
-      this.bridgeState = 'Holding'
-      this.bridgeSince = this.now()
-      this.d.log.info(`BRIDGE BLACK reached - holding ${hold} ms while the camera moves.`)
-      this.bridgeTimer = setTimeout(() => this.processBridgeRelease(), hold)
-      this.changed()
-      return
+      const tgt = this.bridgeTarget!
+      if (this.bridgeSceneName && normalizeSceneKey(this.programScene) !== normalizeSceneKey(this.bridgeSceneName)) {
+        this.resetBridge(`transition ended on '${this.programScene}', not on '${this.bridgeSceneName}'`)
+      } else {
+        const hold = this.cfg.seamless.holdMs
+        this.bridgeState = 'Holding'
+        this.bridgeSince = this.now()
+        this.d.log.info(`SEAMLESS BLACK reached - clicking the camera preset now, then holding ${hold} ms.`)
+        this.ptz.invoke(this.group(tgt), tgt, 'seamless: black reached')
+        this.bridgeTimer = setTimeout(() => this.processBridgeRelease(), hold)
+        this.changed()
+        return
+      }
     }
     if (this.bridgeState === 'FadingIn') {
-      this.d.log.info(`BRIDGE complete - live on '${this.bridgeTarget}'.`)
+      this.d.log.info(`SEAMLESS complete - live on '${this.bridgeTarget}'.`)
       this.resetBridge('complete')
     }
 

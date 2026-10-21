@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 export function Button({
   children,
@@ -17,7 +17,7 @@ export function Button({
   const styles = {
     default: 'bg-panel2 border border-line hover:border-accent/60',
     primary: 'bg-accent text-white hover:brightness-110',
-    ghost: 'hover:bg-panel2 text-mute hover:text-ink'
+    ghost: 'border border-line text-mute hover:border-accent/60 hover:text-ink'
   }[kind]
   return (
     <button title={title} disabled={disabled} onClick={onClick} className={`${base} ${styles}`}>
@@ -95,5 +95,41 @@ export function Select({ value, onChange, children, className = '' }: { value: s
     <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} ${className}`}>
       {children}
     </select>
+  )
+}
+
+/** A small "?" button that opens an explanation bubble (click to open/close, Esc or clicking elsewhere closes it). */
+export function HelpTip({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false)
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  return (
+    <span ref={box} className="relative inline-block align-middle">
+      <button
+        type="button"
+        aria-label={`What is ${title}?`}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={`ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold leading-none ${open ? 'border-accent bg-accent text-white' : 'border-mute text-mute hover:border-accent hover:text-accent'}`}
+      >
+        ?
+      </button>
+      {open && (
+        <span role="dialog" className="absolute left-0 top-7 z-50 w-[340px] max-w-[80vw] rounded-lg border border-line bg-panel2 p-3 text-left text-xs font-normal leading-relaxed text-ink shadow-xl">
+          <span className="mb-1 block text-[13px] font-semibold">{title}</span>
+          {children}
+        </span>
+      )}
+    </span>
   )
 }

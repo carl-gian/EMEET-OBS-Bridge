@@ -33,9 +33,8 @@ If the run shows a red cross, click it, copy the red error text and send it to m
 
 1. **OBS**: Tools > WebSocket Server Settings > tick *Enable WebSocket server*, note port + password. Turn on **Studio Mode**.
 2. In the app: **Settings > OBS** - type the port/password. **Settings > General** - Browse to the EMEET Studio exe (and OBS exe).
-   (Or **General > Import old config** to load your PowerShell config.json.)
 3. Open EMEET Studio. In **Settings > Camera** press **Test click** on a preset - the camera should move without EMEET coming to the front.
-4. Tick **Start with Windows** if you want it on every boot.
+4. Closing (X) or minimizing the window hides it to the tray. To really quit: right-click the tray icon > **Quit ...** and confirm.
 
 ## Sending me logs
 

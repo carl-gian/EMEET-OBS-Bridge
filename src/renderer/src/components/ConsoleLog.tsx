@@ -12,12 +12,21 @@ export default function ConsoleLog({ entries, onClear }: { entries: LogEntry[]; 
   const box = useRef<HTMLDivElement>(null)
   const shown = useMemo(() => entries.filter((e) => RANK[e.level] >= RANK[level]), [entries, level])
 
+  const toBottom = () => {
+    if (box.current) box.current.scrollTop = box.current.scrollHeight
+  }
   useEffect(() => {
-    if (follow && box.current) box.current.scrollTop = box.current.scrollHeight
+    if (follow) toBottom()
   }, [shown, follow])
+  // Follow turns itself off when you scroll up, and back on when you reach the bottom again.
+  const onScroll = () => {
+    const el = box.current
+    if (!el) return
+    setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24)
+  }
 
   return (
-    <section className="flex h-full min-w-0 flex-col rounded-lg border border-line bg-panel">
+    <section className="relative flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <h2 className="text-[15px] font-semibold">Console Log</h2>
         <div className="flex items-center gap-2">
@@ -40,7 +49,7 @@ export default function ConsoleLog({ entries, onClear }: { entries: LogEntry[]; 
       </div>
       <div
         ref={box}
-        onWheel={() => setFollow(false)}
+        onScroll={onScroll}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2 font-mono text-[12px] leading-[1.45]"
       >
         {shown.length === 0 && <div className="p-4 text-center text-mute">Nothing logged yet.</div>}
@@ -51,6 +60,17 @@ export default function ConsoleLog({ entries, onClear }: { entries: LogEntry[]; 
           </div>
         ))}
       </div>
+      {!follow && (
+        <button
+          onClick={() => {
+            setFollow(true)
+            toBottom()
+          }}
+          className="absolute bottom-3 right-5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:brightness-110"
+        >
+          ↓ Jump to latest
+        </button>
+      )}
     </section>
   )
 }

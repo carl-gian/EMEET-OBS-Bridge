@@ -16,7 +16,6 @@ export interface Api {
   openLogs(): Promise<void>
   exportDiagnostics(): Promise<DiagnosticsResult>
   browseFile(title: string, extensions: string[]): Promise<string | null>
-  importLegacy(): Promise<{ ok: boolean; error?: string; config?: AppConfig }>
   clearLogView(): Promise<void>
   onState(cb: (s: AppState) => void): () => void
   onLog(cb: (e: LogEntry) => void): () => void
