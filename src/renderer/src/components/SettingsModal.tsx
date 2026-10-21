@@ -137,6 +137,27 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                 </div>
                 <div className="mt-1 text-xs text-mute">Off by default. Takes effect immediately (no need to press Save).</div>
               </div>
+              <div className="mt-5 rounded-lg border border-line p-3">
+                <div className="mb-1 flex items-center text-sm font-medium">
+                  Support
+                  <HelpTip title="Support">
+                    <b>Export diagnostics</b> saves one zip with the logs, your settings (the OBS password is removed) and version numbers. Send it when something is not working.
+                    <b> Open logs folder</b> shows the raw log files.
+                  </HelpTip>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={async () => {
+                      const r = await window.api.exportDiagnostics()
+                      if (r.ok) setMsg('Diagnostics saved. Send that zip when asking for help.')
+                      else if (r.error) setMsg('Export failed: ' + r.error)
+                    }}
+                  >
+                    Export diagnostics ...
+                  </Button>
+                  <Button onClick={() => void window.api.openLogs()}>Open logs folder</Button>
+                </div>
+              </div>
             </>
           )}
 
