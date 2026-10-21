@@ -10,3 +10,9 @@ legacy/
 meeting-media-manager-master/
 obs-transition-table-master/
 Ptz.ico
+# Never upload exported logs / settings / stray copies of them
+Diagnostic Logs/
+Other App Source Codes/
+OBS-Master-Controller.config.json
+config.json
+*.tsbuildinfo

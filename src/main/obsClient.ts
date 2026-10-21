@@ -150,7 +150,7 @@ export class ObsClient {
         await closed // stay here until the socket closes
         this.log.warn('Connection to OBS closed.')
       } catch (e) {
-        const msg = (e as Error).message ?? String(e)
+        const msg = (e as Error).message || ((e as any)?.code ? `connection failed (${(e as any).code})` : 'connection refused - is OBS running with the WebSocket server enabled?')
         const auth = /authentic/i.test(msg) || (e as any)?.code === 4009
         this.lastError = auth ? 'Wrong OBS WebSocket password' : msg
         if (auth) this.log.error('OBS rejected the password. Check Settings > OBS (and OBS: Tools > WebSocket Server Settings).')

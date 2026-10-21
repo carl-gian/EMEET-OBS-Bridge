@@ -130,7 +130,7 @@ export class PowerShellDriver implements EmeetDriver {
           this.pending.delete(r.id)
           const lag = cmd ? Date.now() - cmd.issuedAt : undefined
           this.ptzLog.info(
-            `Preset ${r.presetId ?? '(tracking only)'}${r.label ? ` (${r.label})` : ''}: ${r.clicks} click(s) sent, ${r.afterCmdMs} ms after command arrived` +
+            `${r.presetId ? `Preset ${r.presetId}` : 'Click'}${r.label ? ` (${r.label})` : ''}: ${r.clicks} click(s) sent, ${r.afterCmdMs} ms after command arrived` +
               (r.lateMs ? `, LATE by ${r.lateMs} ms` : '') +
               (lag !== undefined ? `; total since decision ${lag} ms` : '')
           )
@@ -139,7 +139,13 @@ export class PowerShellDriver implements EmeetDriver {
         }
         break
       case 'ERR':
-        this.ptzLog.error(`Camera click failed: ${rest}`)
+        try {
+          const e = JSON.parse(rest)
+          if (e.cmd === 'ensure') this.ptzLog.error(`EMEET window check failed: ${e.error}`)
+          else this.ptzLog.error(`Camera click failed (${e.cmd}${e.id ? ' #' + e.id : ''}): ${e.error}`)
+        } catch {
+          this.ptzLog.error(`Camera helper error: ${rest}`)
+        }
         break
       case 'FATAL':
         this.log.error(rest)
