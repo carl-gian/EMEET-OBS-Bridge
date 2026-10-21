@@ -1,7 +1,7 @@
 {
   "name": "obs-master-controller",
   "productName": "OBS Master Controller",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "Studio Mode transitions + EMEET PTZ camera presets for OBS Studio",
   "main": "./out/main/index.js",
   "author": "Gi",
@@ -12,10 +12,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "fake-obs": "node scripts/fake-obs.mjs",
-    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never"
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
+    "release:win": "electron-vite build && electron-builder --win --x64 --publish always"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
+    "electron-updater": "^6.8.9",
     "obs-websocket-js": "^5.0.8"
   },
   "devDependencies": {
