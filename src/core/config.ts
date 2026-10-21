@@ -1,5 +1,6 @@
 import type { AppConfig, Point, PresetCfg } from '@shared/types'
 import { defaultConfig } from './defaults'
+import { DEFAULT_PRESETS, MAX_PRESETS, MIN_PRESETS, presetNumber } from '@shared/presets'
 
 type Obj = Record<string, any>
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -44,8 +45,14 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   const raw: Obj = isObj(rawIn) ? stripComments(rawIn) : {}
   const cfg = def
 
-  for (const section of ['general', 'obs', 'transitions', 'blackBridge', 'ptz', 'emeet', 'behavior', 'logging'] as const) {
+  for (const section of ['general', 'obs', 'transitions', 'seamless', 'ptz', 'emeet', 'behavior', 'logging'] as const) {
     if (section in raw) (cfg as Obj)[section] = mergeKnown((def as Obj)[section], raw[section])
+  }
+
+  // Older builds called Seamless Mode "Black Bridge".
+  if (isObj(raw.blackBridge) && !isObj(raw.seamless)) {
+    if (typeof raw.blackBridge.sceneName === 'string') cfg.seamless.sceneName = raw.blackBridge.sceneName
+    if (Number.isFinite(Number(raw.blackBridge.holdMs))) cfg.seamless.holdMs = Number(raw.blackBridge.holdMs)
   }
 
   // Old layout: obs.uri = "ws://host:port"
@@ -64,20 +71,26 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
       const r = raw.transitions[k]
       if (isObj(r) && 'settings' in r) cfg.transitions[k].settings = isObj(r.settings) ? r.settings : null
     }
-    if (raw.transitions.crossGroupMode === 'blackBridge') cfg.transitions.crossGroupMode = 'blackBridge'
+    if (raw.transitions.crossGroupMode === 'blackBridge' || raw.transitions.crossGroupMode === 'seamless') cfg.transitions.crossGroupMode = 'seamless'
   }
 
-  // Presets: id -> { label, x, y | clicks }
+  // Presets: always Preset1..Preset8. Anything the file doesn't define comes from the preloaded defaults.
   if (isObj(raw.presets)) {
-    const p: Record<string, PresetCfg> = {}
     for (const [id, v] of Object.entries(raw.presets)) {
       if (!isObj(v)) continue
-      const preset: PresetCfg = { label: typeof v.label === 'string' ? v.label : id }
+      if (!(id in DEFAULT_PRESETS)) {
+        warnings.push(`Preset '${id}' is not one of Preset1..Preset${MAX_PRESETS} - ignored.`)
+        continue
+      }
+      const preset: PresetCfg = { label: typeof v.label === 'string' ? v.label : DEFAULT_PRESETS[id].label }
       const x = Number(v.x)
       const y = Number(v.y)
       if (Number.isFinite(x) && Number.isFinite(y) && v.x !== null && v.y !== null && v.x !== '' && v.y !== '') {
         preset.x = Math.round(x)
         preset.y = Math.round(y)
+      } else {
+        preset.x = DEFAULT_PRESETS[id].x
+        preset.y = DEFAULT_PRESETS[id].y
       }
       if (Array.isArray(v.clicks)) {
         preset.clicks = []
@@ -87,9 +100,8 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
           preset.clicks.push({ ...pt, ...(Number.isFinite(Number(c.delayMs)) && c.delayMs !== null ? { delayMs: Number(c.delayMs) } : {}), ...(c.space === 'client' || c.space === 'screen' ? { space: c.space } : {}) })
         }
       }
-      p[id] = preset
+      cfg.presets[id] = preset
     }
-    cfg.presets = p
   }
 
   // Scenes: name -> preset id (anything unknown is dropped with a warning)
@@ -105,6 +117,19 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
     }
     cfg.scenes = s
   }
+
+  // How many presets are shown: saved value, but never fewer than the highest preset a scene uses (and 3..8).
+  const highestUsed = Math.max(0, ...Object.values(cfg.scenes).map(presetNumber))
+  const savedCount = Number(raw.presetCount)
+  cfg.presetCount = Math.min(MAX_PRESETS, Math.max(MIN_PRESETS, Number.isFinite(savedCount) ? Math.round(savedCount) : MIN_PRESETS, highestUsed))
+
+  // Version 2: Fast Mode fires the click immediately (was 200 ms). Carry old default forward once.
+  const fromVersion = Number(raw.configVersion) || 1
+  if (fromVersion < 2 && isObj(raw.ptz) && Number(raw.ptz.fireOffsetMs) === 200) {
+    cfg.ptz.fireOffsetMs = 0
+    warnings.push('Settings updated: Fast Mode camera click offset changed from 200 ms to 0 ms (immediate). You can change it in Settings > Transition Rules.')
+  }
+  cfg.configVersion = 2
 
   if (isObj(raw.sceneTracking)) {
     const t: Record<string, boolean> = {}
@@ -128,9 +153,11 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   cfg.transitions.intraGroup.durationMs = nonNeg(cfg.transitions.intraGroup.durationMs, 1000)
   cfg.transitions.crossGroup.durationMs = nonNeg(cfg.transitions.crossGroup.durationMs, 1000)
   cfg.ptz.fireOffsetMs = nonNeg(cfg.ptz.fireOffsetMs, 200)
-  cfg.blackBridge.holdMs = nonNeg(cfg.blackBridge.holdMs, 3000)
+  cfg.seamless.holdMs = nonNeg(cfg.seamless.holdMs, 3000)
+  cfg.seamless.fadeToBlackMs = nonNeg(cfg.seamless.fadeToBlackMs, 800)
+  cfg.seamless.fadeInMs = nonNeg(cfg.seamless.fadeInMs, 800)
   if (!['Debug', 'Info', 'Warn', 'Error'].includes(cfg.logging.level)) cfg.logging.level = 'Debug'
-  if (!['fast', 'blackBridge'].includes(cfg.transitions.crossGroupMode)) cfg.transitions.crossGroupMode = 'fast'
+  if (!['fast', 'seamless'].includes(cfg.transitions.crossGroupMode)) cfg.transitions.crossGroupMode = 'fast'
   if (!['screen', 'client'].includes(cfg.emeet.coordSpace)) cfg.emeet.coordSpace = 'screen'
 
   return { config: cfg, warnings }

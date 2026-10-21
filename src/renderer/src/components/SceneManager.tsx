@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { AppConfig, AppState } from '@shared/types'
 import { normalizeSceneKey } from '@shared/scene'
+import { presetNumber } from '@shared/presets'
 import { Pill, Switch } from './ui'
 
 interface Row {
@@ -34,13 +35,14 @@ export default function SceneManager({ state, cfg, onCfg }: { state: AppState; c
     return out
   }, [state.scenes, cfg.scenes, cfg.sceneTracking])
 
-  const presetIds = Object.keys(cfg.presets)
+  const allIds = Object.keys(cfg.presets).sort((a, b) => presetNumber(a) - presetNumber(b))
+  const shownIds = allIds.filter((id) => presetNumber(id) <= cfg.presetCount)
   const connected = state.obs.status === 'connected'
   const isProgram = (n: string) => normalizeSceneKey(n) === normalizeSceneKey(state.program)
   const isPreview = (n: string) => normalizeSceneKey(n) === normalizeSceneKey(state.preview) && !isProgram(n)
 
   return (
-    <section className="flex h-full min-w-0 flex-col rounded-lg border border-line bg-panel">
+    <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
           <h2 className="text-[15px] font-semibold">Scene Manager</h2>
@@ -90,7 +92,7 @@ export default function SceneManager({ state, cfg, onCfg }: { state: AppState; c
               className="rounded-md border border-line bg-bg px-2 py-1.5 text-[13px] outline-none focus:border-accent"
             >
               <option value="">None</option>
-              {presetIds.map((id) => (
+              {allIds.filter((id) => shownIds.includes(id) || id === r.preset).map((id) => (
                 <option key={id} value={id}>
                   {id.replace(/^Preset/, 'Preset ')} - {cfg.presets[id].label}
                 </option>

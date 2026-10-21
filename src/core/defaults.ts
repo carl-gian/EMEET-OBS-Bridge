@@ -1,9 +1,11 @@
 import type { AppConfig } from '@shared/types'
+import { DEFAULT_PRESETS, MIN_PRESETS } from '@shared/presets'
 
 /** Shipped defaults. These mirror the owner's proven PowerShell config (the OBS password is NOT included). */
 export function defaultConfig(): AppConfig {
   return {
-    general: { obsPath: '', launchObsOnStart: false, startMinimized: true, startWithWindows: false },
+    configVersion: 2,
+    general: { obsPath: '', launchObsOnStart: false },
     obs: {
       host: 'localhost',
       port: 4455,
@@ -12,16 +14,8 @@ export function defaultConfig(): AppConfig {
       requestTimeoutSec: 5,
       connectTimeoutSec: 10
     },
-    presets: {
-      Preset1: { label: 'Stage / Speaker', x: 929, y: 762 },
-      Preset2: { label: 'Reader', x: 1025, y: 764 },
-      Preset3: { label: 'Table', x: 1119, y: 765 },
-      Preset4: { label: 'Preset 4', x: 1216, y: 762 },
-      Preset5: { label: 'Preset 5', x: 926, y: 862 },
-      Preset6: { label: 'Preset 6', x: 1027, y: 862 },
-      Preset7: { label: 'Preset 7', x: 1121, y: 864 },
-      Preset8: { label: 'Preset 8', x: 1222, y: 859 }
-    },
+    presets: JSON.parse(JSON.stringify(DEFAULT_PRESETS)),
+    presetCount: MIN_PRESETS,
     scenes: {
       'CLOSE UP----------(For talks only)': 'Preset1',
       'FULL STAGE----------(For Prayers and Switching Speaker)': 'Preset1',
@@ -43,8 +37,8 @@ export function defaultConfig(): AppConfig {
         settings: { color: 4278190080, switch_point: 50 }
       }
     },
-    blackBridge: { sceneName: 'BLACK SCREEN', holdMs: 3000 },
-    ptz: { enabled: true, fireOffsetMs: 200, syncOnStartup: false },
+    seamless: { sceneName: 'BLACK SCREEN', fadeToBlackMs: 800, holdMs: 3000, fadeInMs: 800 },
+    ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false },
     tracking: {
       enabled: false,
       enableClick: null,

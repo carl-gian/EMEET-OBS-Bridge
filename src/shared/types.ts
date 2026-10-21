@@ -35,14 +35,13 @@ export interface TransitionCfg {
   settings: Record<string, unknown> | null
 }
 
-export type CrossGroupMode = 'fast' | 'blackBridge'
+export type CrossGroupMode = 'fast' | 'seamless'
 
 export interface AppConfig {
+  configVersion: number
   general: {
     obsPath: string
     launchObsOnStart: boolean
-    startMinimized: boolean
-    startWithWindows: boolean
   }
   obs: {
     host: string
@@ -52,7 +51,8 @@ export interface AppConfig {
     requestTimeoutSec: number
     connectTimeoutSec: number
   }
-  presets: Record<string, PresetCfg>
+  presets: Record<string, PresetCfg> // always Preset1..Preset8 (coordinates preloaded)
+  presetCount: number // how many presets are shown/usable (3..8)
   scenes: Record<string, string> // exact OBS scene name -> preset id
   sceneTracking: Record<string, boolean> // exact OBS scene name -> use EMEET tracking
   transitions: {
@@ -60,8 +60,8 @@ export interface AppConfig {
     intraGroup: TransitionCfg
     crossGroup: TransitionCfg
   }
-  blackBridge: { sceneName: string; holdMs: number }
-  ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean }
+  seamless: { sceneName: string; fadeToBlackMs: number; holdMs: number; fadeInMs: number }
+  ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean } // fireOffsetMs: 0 = click as soon as OBS reports the transition started
   tracking: {
     enabled: boolean // master switch ("Enable Tracking")
     enableClick: Point | null
@@ -159,6 +159,5 @@ export const IPC = {
   openLogs: 'app:open-logs',
   exportDiagnostics: 'app:export-diagnostics',
   browseFile: 'app:browse-file',
-  importLegacy: 'config:import-legacy',
   clearLogsView: 'log:clear'
 } as const

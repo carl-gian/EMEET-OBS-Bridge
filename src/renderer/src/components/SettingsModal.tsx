@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AppConfig, Point } from '@shared/types'
-import { Button, Field, NumInput, Select, Switch, TextInput } from './ui'
+import { DEFAULT_PRESETS, MAX_PRESETS, MIN_PRESETS, presetNumber } from '@shared/presets'
+import { Button, Field, HelpTip, NumInput, Select, Switch, TextInput } from './ui'
 
 type Tab = 'general' | 'obs' | 'transitions' | 'camera'
 const TABS: { id: Tab; label: string }[] = [
@@ -10,11 +11,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'camera', label: 'Camera' }
 ]
 
-export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfig; onClose: () => void; onSaved: (c: AppConfig) => void }) {
+export default function SettingsModal({ cfg, dryRun, onClose, onSaved }: { cfg: AppConfig; dryRun: boolean; onClose: () => void; onSaved: (c: AppConfig) => void }) {
   const [tab, setTab] = useState<Tab>('general')
   const [d, setD] = useState<AppConfig>(() => JSON.parse(JSON.stringify(cfg)))
   const [showPw, setShowPw] = useState(false)
   const [msg, setMsg] = useState('')
+  const [unlocked, setUnlocked] = useState(false) // preset coordinates are locked until "Edit presets"
+  const [confirmReset, setConfirmReset] = useState(false)
 
   // update a deep copy of the draft
   const edit = (fn: (c: AppConfig) => void) =>
@@ -37,8 +40,12 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
 
   const pt = (p: Point | null): Point => p ?? { x: 0, y: 0 }
 
+  const presetIds = Object.keys(d.presets).sort((a, b) => presetNumber(a) - presetNumber(b))
+  const shown = presetIds.filter((id) => presetNumber(id) <= d.presetCount)
+  const highestUsed = Math.max(0, ...Object.values(d.scenes).map(presetNumber))
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
       <div className="flex h-[min(760px,100%)] w-[min(860px,100%)] flex-col rounded-xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold">Settings</h2>
@@ -74,10 +81,8 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
                   <Button onClick={() => browse('Pick OBS Studio', ['exe'], (p) => edit((c) => (c.general.obsPath = p)))}>Browse</Button>
                 </div>
               </Field>
-              <div className="mb-4 flex flex-col gap-3">
+              <div className="mb-5">
                 <Switch checked={d.general.launchObsOnStart} onChange={(v) => edit((c) => (c.general.launchObsOnStart = v))} label="Open OBS when this app starts (if it is not already running)" />
-                <Switch checked={d.general.startWithWindows} onChange={(v) => edit((c) => (c.general.startWithWindows = v))} label="Start with Windows" />
-                <Switch checked={d.general.startMinimized} onChange={(v) => edit((c) => (c.general.startMinimized = v))} label="When started by Windows, stay hidden in the tray" />
               </div>
               <Field label="Log detail" hint="Debug records every OBS event and click - best while we are testing. Logs are in the logs folder (Open logs).">
                 <Select value={d.logging.level} onChange={(v) => edit((c) => (c.logging.level = v as AppConfig['logging']['level']))} className="w-56">
@@ -87,20 +92,27 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
                   <option value="Error">Errors only</option>
                 </Select>
               </Field>
-              <Field label="Old PowerShell settings" hint="Imports presets, scenes, OBS address/password and timings from your old OBS-Master-Controller.config.json. Replaces the current settings.">
-                <Button
-                  onClick={async () => {
-                    const r = await window.api.importLegacy()
-                    if (r.ok && r.config) {
-                      setD(JSON.parse(JSON.stringify(r.config)))
-                      onSaved(r.config)
-                      setMsg('Imported and saved.')
-                    } else if (r.error) setMsg('Import failed: ' + r.error)
-                  }}
-                >
-                  Import old config ...
-                </Button>
-              </Field>
+              <div className="rounded-lg border border-line p-3">
+                <div className="flex items-center">
+                  <Switch
+                    checked={dryRun}
+                    onChange={(v) => void window.api.setDryRun(v)}
+                    label={
+                      <span className="font-medium">
+                        Dry run
+                      </span>
+                    }
+                  />
+                  <HelpTip title="Dry run">
+                    When Dry run is ON, the app still watches OBS and writes every decision to the log (which transition it picked, which preset it would click), but it
+                    sends <b>nothing</b> to OBS and <b>no clicks</b> to the camera. Use it to check your scene setup without moving the camera.
+                    <br />
+                    <br />
+                    It switches itself OFF every time the app starts, and a yellow banner is shown while it is on.
+                  </HelpTip>
+                </div>
+                <div className="mt-1 text-xs text-mute">Off by default. Takes effect immediately (no need to press Save).</div>
+              </div>
             </>
           )}
 
@@ -158,50 +170,74 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
                   <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'fast' ? 'border-accent bg-accent/10' : 'border-line'}`}>
                     <input type="radio" checked={d.transitions.crossGroupMode === 'fast'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'fast'))} />
                     <span>
-                      <span className="font-medium">Fast Mode</span> <span className="text-xs text-ok">(proven on your rig)</span>
-                      <span className="block text-xs text-mute">
-                        One fade (normally to black). The camera preset is clicked a moment after the transition starts, so the move is hidden by the dip to black.
-                      </span>
+                      <span className="font-medium">Fast Mode</span>
+                      <span className="block text-xs text-mute">One fade (normally to black). The camera preset is clicked as soon as you press Transition in OBS, so the camera moves while the fade runs.</span>
                     </span>
                   </label>
-                  <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'blackBridge' ? 'border-accent bg-accent/10' : 'border-line'}`}>
-                    <input type="radio" checked={d.transitions.crossGroupMode === 'blackBridge'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'blackBridge'))} />
+                  <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'seamless' ? 'border-accent bg-accent/10' : 'border-line'}`}>
+                    <input type="radio" checked={d.transitions.crossGroupMode === 'seamless'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'seamless'))} />
                     <span>
-                      <span className="font-medium">Black Bridge</span> <span className="text-xs text-warn">(experimental)</span>
+                      <span className="font-medium">Seamless Mode</span>
                       <span className="block text-xs text-mute">
-                        Fade to a black scene → camera moves → hold on black → fade to the target scene. Needs a scene in OBS named as below (just a black Color Source).
+                        Pick a scene in Preview and the app remembers it. Press Transition: fade to the black scene → camera preset is clicked the moment black is reached → hold on
+                        black → fade to the remembered scene. While armed, OBS Preview shows the black scene.
                       </span>
                     </span>
                   </label>
                 </div>
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <div className="mb-1 text-xs text-mute">OBS transition name (Fast Mode)</div>
-                    <TextInput value={d.transitions.crossGroup.name} onChange={(v) => edit((c) => (c.transitions.crossGroup.name = v))} />
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-mute">Duration (ms)</div>
-                    <NumInput value={d.transitions.crossGroup.durationMs} onChange={(v) => edit((c) => (c.transitions.crossGroup.durationMs = v))} />
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-mute">Camera click after start (ms)</div>
-                    <NumInput value={d.ptz.fireOffsetMs} onChange={(v) => edit((c) => (c.ptz.fireOffsetMs = v))} />
-                  </div>
-                </div>
-              </Field>
 
-              <Field label="Black Bridge settings">
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <div className="mb-1 text-xs text-mute">Black scene name in OBS</div>
-                    <TextInput value={d.blackBridge.sceneName} onChange={(v) => edit((c) => (c.blackBridge.sceneName = v))} />
+                {d.transitions.crossGroupMode === 'fast' && (
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <div className="mb-1 text-xs text-mute">OBS transition name</div>
+                      <TextInput value={d.transitions.crossGroup.name} onChange={(v) => edit((c) => (c.transitions.crossGroup.name = v))} />
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-mute">Duration (ms)</div>
+                      <NumInput value={d.transitions.crossGroup.durationMs} onChange={(v) => edit((c) => (c.transitions.crossGroup.durationMs = v))} />
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center text-xs text-mute">
+                        Camera click delay (ms)
+                        <HelpTip title="Camera click delay">
+                          How long to wait, after OBS says the transition has started, before the camera preset button is clicked.
+                          <br />
+                          <br />
+                          <b>0 = instant</b> (default): the click is sent the moment you press Transition in OBS, before the fade finishes and before the camera has moved.
+                          <br />
+                          <br />
+                          Raise it (for example 200) if you want the picture to start fading first and the camera to move a little later. OBS only reports the start
+                          after you press Transition, so the click can never happen earlier than that.
+                        </HelpTip>
+                      </div>
+                      <NumInput value={d.ptz.fireOffsetMs} onChange={(v) => edit((c) => (c.ptz.fireOffsetMs = v))} />
+                    </div>
                   </div>
-                  <div>
-                    <div className="mb-1 text-xs text-mute">Hold on black (ms)</div>
-                    <NumInput value={d.blackBridge.holdMs} onChange={(v) => edit((c) => (c.blackBridge.holdMs = v))} />
-                  </div>
-                </div>
-                <div className="mt-1 text-xs text-mute">In Black Bridge mode the fade to black and the fade to the target both use the "same preset" transition above.</div>
+                )}
+
+                {d.transitions.crossGroupMode === 'seamless' && (
+                  <>
+                    <div className="mb-3">
+                      <div className="mb-1 text-xs text-mute">Black scene name in OBS (a scene with just a black Color Source)</div>
+                      <TextInput value={d.seamless.sceneName} onChange={(v) => edit((c) => (c.seamless.sceneName = v))} />
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <div className="mb-1 text-xs text-mute">1. Fade to black (ms)</div>
+                        <NumInput value={d.seamless.fadeToBlackMs} onChange={(v) => edit((c) => (c.seamless.fadeToBlackMs = v))} />
+                      </div>
+                      <div>
+                        <div className="mb-1 text-xs text-mute">2. Camera clicks, then hold on black (ms)</div>
+                        <NumInput value={d.seamless.holdMs} onChange={(v) => edit((c) => (c.seamless.holdMs = v))} />
+                      </div>
+                      <div>
+                        <div className="mb-1 text-xs text-mute">3. Fade to the scene (ms)</div>
+                        <NumInput value={d.seamless.fadeInMs} onChange={(v) => edit((c) => (c.seamless.fadeInMs = v))} />
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-mute">Both fades use the "same preset" transition above (its name). Scene changes made by other programs skip the black and only move the camera.</div>
+                  </>
+                )}
               </Field>
 
               <details className="rounded-lg border border-line p-3">
@@ -228,7 +264,11 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
             <>
               <Field
                 label="Preset buttons in EMEET Studio"
-                hint="Screen coordinates (pixels) of each preset button when the EMEET window is at the position below. Use Test click to check - it clicks the button in the background."
+                hint={
+                  unlocked
+                    ? 'Editing is ON. Screen coordinates (pixels) of each preset button when the EMEET window is at the position below. Press Done editing to lock them again.'
+                    : 'Locked, so a stray click cannot change them. Press "Edit presets" to make changes. Test click still works.'
+                }
               >
                 <div className="overflow-hidden rounded-lg border border-line">
                   <div className="grid grid-cols-[90px_1fr_90px_90px_90px] gap-2 bg-panel2 px-3 py-1.5 text-xs uppercase tracking-wide text-mute">
@@ -238,40 +278,92 @@ export default function SettingsModal({ cfg, onClose, onSaved }: { cfg: AppConfi
                     <div>Y</div>
                     <div />
                   </div>
-                  {Object.entries(d.presets).map(([id, p]) => (
-                    <div key={id} className="grid grid-cols-[90px_1fr_90px_90px_90px] items-center gap-2 border-t border-line px-3 py-1.5">
-                      <div className="text-[13px] text-mute">{id.replace(/^Preset/, 'Preset ')}</div>
-                      <TextInput value={p.label} onChange={(v) => edit((c) => (c.presets[id].label = v))} />
-                      <NumInput width="w-full" value={p.x ?? null} allowEmpty onChange={(v) => edit((c) => (c.presets[id].x = v ?? undefined))} />
-                      <NumInput width="w-full" value={p.y ?? null} allowEmpty onChange={(v) => edit((c) => (c.presets[id].y = v ?? undefined))} />
-                      <Button disabled={p.x == null || p.y == null} onClick={() => window.api.testClick(p.x!, p.y!, `${id} ${p.label}`)}>
-                        Test click
-                      </Button>
-                    </div>
-                  ))}
+                  {shown.map((id) => {
+                    const p = d.presets[id]
+                    return (
+                      <div key={id} className="grid grid-cols-[90px_1fr_90px_90px_90px] items-center gap-2 border-t border-line px-3 py-1.5">
+                        <div className="text-[13px] text-mute">{id.replace(/^Preset/, 'Preset ')}</div>
+                        {unlocked ? (
+                          <>
+                            <TextInput value={p.label} onChange={(v) => edit((c) => (c.presets[id].label = v))} />
+                            <NumInput width="w-full" value={p.x ?? null} allowEmpty onChange={(v) => edit((c) => (c.presets[id].x = v ?? undefined))} />
+                            <NumInput width="w-full" value={p.y ?? null} allowEmpty onChange={(v) => edit((c) => (c.presets[id].y = v ?? undefined))} />
+                          </>
+                        ) : (
+                          <>
+                            <div className="truncate text-[13px]">{p.label}</div>
+                            <div className="font-mono text-[13px]">{p.x ?? '-'}</div>
+                            <div className="font-mono text-[13px]">{p.y ?? '-'}</div>
+                          </>
+                        )}
+                        <Button disabled={p.x == null || p.y == null} onClick={() => window.api.testClick(p.x!, p.y!, `${id} ${p.label}`)}>
+                          Test click
+                        </Button>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    onClick={() =>
-                      edit((c) => {
-                        const n = Math.max(0, ...Object.keys(c.presets).map((k) => Number(k.replace('Preset', '')) || 0)) + 1
-                        c.presets[`Preset${n}`] = { label: `Preset ${n}` }
-                      })
-                    }
-                  >
-                    Add preset
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      const ids = Object.keys(d.presets)
-                      const last = ids[ids.length - 1]
-                      if (!last) return
-                      if (Object.values(d.scenes).includes(last)) setMsg(`${last} is still used by a scene - set that scene to None first.`)
-                      else edit((c) => void delete c.presets[last])
-                    }}
-                  >
-                    Remove last
-                  </Button>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {!unlocked ? (
+                    <Button
+                      onClick={() => {
+                        setUnlocked(true)
+                        setMsg('')
+                      }}
+                    >
+                      🔒 Edit presets
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        kind="primary"
+                        onClick={() => {
+                          setUnlocked(false)
+                          setConfirmReset(false)
+                        }}
+                      >
+                        Done editing
+                      </Button>
+                      <Button
+                        disabled={d.presetCount >= MAX_PRESETS}
+                        onClick={() => edit((c) => (c.presetCount = Math.min(MAX_PRESETS, c.presetCount + 1)))}
+                        title={d.presetCount >= MAX_PRESETS ? 'All 8 presets are already shown' : `Show Preset ${d.presetCount + 1} (coordinates are preloaded)`}
+                      >
+                        Add preset {d.presetCount < MAX_PRESETS ? d.presetCount + 1 : ''}
+                      </Button>
+                      <Button
+                        disabled={d.presetCount <= MIN_PRESETS}
+                        onClick={() => {
+                          if (d.presetCount <= highestUsed) setMsg(`Preset ${d.presetCount} is still used by a scene - set that scene to None first.`)
+                          else {
+                            setMsg('')
+                            edit((c) => (c.presetCount = Math.max(MIN_PRESETS, c.presetCount - 1)))
+                          }
+                        }}
+                      >
+                        Remove last
+                      </Button>
+                      {!confirmReset ? (
+                        <Button onClick={() => setConfirmReset(true)}>Reset to defaults</Button>
+                      ) : (
+                        <span className="flex items-center gap-2 rounded-md border border-warn/50 px-2 py-1 text-xs text-warn">
+                          Restore the original labels and coordinates of all 8 presets?
+                          <Button
+                            kind="primary"
+                            onClick={() => {
+                              edit((c) => (c.presets = JSON.parse(JSON.stringify(DEFAULT_PRESETS))))
+                              setConfirmReset(false)
+                              setMsg('Presets restored to the original labels and coordinates (click Save to keep).')
+                            }}
+                          >
+                            Yes, restore
+                          </Button>
+                          <Button onClick={() => setConfirmReset(false)}>Cancel</Button>
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
               </Field>
 

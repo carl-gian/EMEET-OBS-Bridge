@@ -389,3 +389,16 @@ Source of truth for behaviour (PowerShell 5.1): `OBS-Master-Controller.ps1` (eve
 resident-worker client) and `EMEET-Background.ps1` (Win32 window handling, background click, `-Action Daemon` resident worker
 listening on named pipe `EmeetPtzWorker`, receiving `"<presetId>|<fireAtUnixMs>"`). When the spec here and the PowerShell
 disagree, **ask** — the PowerShell is what is proven on the live rig.
+
+
+---
+
+## 14. Owner-approved changes (2026-10-21, build 0.2.0) - these supersede the sections above
+
+- **Fast Mode click delay defaults to 0 ms** (`ptz.fireOffsetMs`, was 200): the camera click is dispatched as soon as `SceneTransitionStarted` arrives. Still configurable (Settings > Transition Rules, with a help tip). Old configs that had 200 are migrated to 0 once (`configVersion` 2).
+- **Black Bridge is now "Seamless Mode"** (not experimental; `transitions.crossGroupMode: "seamless"`, `seamless: {sceneName, fadeToBlackMs 800, holdMs 3000, fadeInMs 800}`). Sequence: operator picks a scene in Preview (remembered) -> app puts the BLACK scene in Preview -> on Transition: 800 ms fade to black -> **camera click fires when that fade ends** -> hold 3000 ms -> 800 ms fade to the remembered scene.
+- **Camera helper is a resident `powershell.exe` running `resources/ptz-worker.ps1`** (JSON lines on stdin) - not koffi (section 3/6 notes about koffi are superseded; the "no per-click spawn" rule still holds).
+- Presets: always Preset1..8 stored with coordinates; `presetCount` (3..8, default 3) decides how many are shown. Preset editing is locked in the UI until "Edit presets".
+- Removed: import of the old PowerShell config, Start with Windows (a stale login item from older builds is cleared). Dry run lives in Settings > General, is never persisted (off at every start), and is not in the tray menu.
+- Closing/minimizing hides to the tray; tray Quit asks for confirmation.
+- Per-scene EMEET **tracking** clicks (Settings > Camera coordinates; `tracking.*`, `sceneTracking`).

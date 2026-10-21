@@ -36,6 +36,7 @@ export class ConfigStore {
     try {
       const raw = JSON.parse(readFileSync(this.path, 'utf8'))
       this.cfg = this.fromFileObject(raw)
+      if (raw?.configVersion !== this.cfg.configVersion) this.save() // persist migrations right away
     } catch (e) {
       this.log.error(`Could not read config.json (${(e as Error).message}) - using defaults. The broken file was kept as config.broken.json.`)
       try {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
 import { exec, spawn } from 'child_process'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { is } from './is'
 import { IPC } from '@shared/types'
@@ -12,6 +12,7 @@ import { ConfigStore } from './configStore'
 import { MockDriver, PowerShellDriver, workerScriptPath, type EmeetDriver } from './emeetDriver'
 import { ObsClient } from './obsClient'
 import { buildDiagnosticsZip } from './diagnostics'
+import { startDock } from './dock'
 
 const isWin = process.platform === 'win32'
 let win: BrowserWindow | null = null
@@ -37,7 +38,7 @@ function showWindow() {
   win.focus()
 }
 
-function createWindow(startHidden: boolean) {
+function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -52,26 +53,22 @@ function createWindow(startHidden: boolean) {
   })
   win.setMenu(null)
   win.once('ready-to-show', () => {
-    if (!startHidden) win?.show()
+    win?.show()
   })
-  // Closing the window only hides it to the tray.
+  // Closing OR minimizing hides the window to the tray (it also leaves the taskbar). The tray icon brings it back.
   win.on('close', (e) => {
     if (!quitting) {
       e.preventDefault()
       win?.hide()
     }
   })
+  win.on('minimize', () => win?.hide())
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
   })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
-}
-
-function applyLoginItem(cfg: AppConfig) {
-  if (!app.isPackaged || !isWin) return // never register the dev copy of Electron
-  app.setLoginItemSettings({ openAtLogin: cfg.general.startWithWindows, args: cfg.general.startMinimized ? ['--hidden'] : [] })
 }
 
 function main() {
@@ -99,7 +96,17 @@ function main() {
   log.info(
     `Settings: OBS ws://${c0.obs.host}:${c0.obs.port} | intra '${c0.transitions.intraGroup.name}' ${c0.transitions.intraGroup.durationMs} ms | cross '${c0.transitions.crossGroup.name}' ${c0.transitions.crossGroup.durationMs} ms | mode ${c0.transitions.crossGroupMode} | click offset ${c0.ptz.fireOffsetMs} ms | tracking ${c0.tracking.enabled ? 'on' : 'off'}`
   )
-  applyLoginItem(c0)
+  // "Start with Windows" was removed: clear any startup entry an earlier build may have registered.
+  if (app.isPackaged && isWin) {
+    try {
+      if (app.getLoginItemSettings().openAtLogin) {
+        app.setLoginItemSettings({ openAtLogin: false })
+        log.info('Removed the old "start with Windows" entry.')
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   // ---- camera driver ----
   const driver: EmeetDriver = isWin ? new PowerShellDriver(log, ptzLog, emeetLog) : new MockDriver(ptzLog, emeetLog)
@@ -143,9 +150,9 @@ function main() {
   }
   logger.onEntry = (e) => win?.webContents.send(IPC.logPush, e)
 
-  const startHidden = process.argv.includes('--hidden')
-  createWindow(startHidden)
+  createWindow()
   createTray()
+  const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow })
 
   // ---- start everything ----
   driver.start(c0.emeet)
@@ -178,17 +185,30 @@ function main() {
         { type: 'separator' },
         { label: 'Show window', click: showWindow },
         { label: 'Resync camera', click: () => controller.resyncPtz() },
-        { label: 'Dry run (log only)', type: 'checkbox', checked: controller.dryRun, click: (m) => (controller.dryRun = m.checked) },
         { type: 'separator' },
         { label: 'Open logs folder', click: () => void shell.openPath(logDir) },
         { label: 'Export diagnostics ...', click: () => void exportDiagnostics() },
         { type: 'separator' },
-        { label: 'Quit', click: () => app.quit() }
+        { label: 'Quit ...', click: () => void confirmQuit() }
       ])
     )
   }
 
   // ----------------------------------------------------------- helper actions ----
+  async function confirmQuit() {
+    const r = await dialog.showMessageBox({
+      type: 'warning',
+      title: 'Quit OBS Master Controller?',
+      message: 'Quit OBS Master Controller?',
+      detail: 'Camera presets and transitions will stop following your scenes until you start the app again. Closing the window (X) keeps it running in the tray.',
+      buttons: ['Keep running', 'Quit'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    })
+    if (r.response === 1) app.quit()
+  }
+
   async function exportDiagnostics() {
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
     const r = await dialog.showSaveDialog({
@@ -240,7 +260,6 @@ function main() {
 
   function afterConfigChange(before: AppConfig, after: AppConfig) {
     logger.level = after.logging.level
-    applyLoginItem(after)
     controller.onConfigChanged()
     if (JSON.stringify(before.obs) !== JSON.stringify(after.obs)) obs.reconnect()
     if (JSON.stringify(before.emeet) !== JSON.stringify(after.emeet) && after.emeet.enabled) driver.ensure(after.emeet)
@@ -314,29 +333,14 @@ function main() {
     const r = await dialog.showOpenDialog(win!, { title, properties: ['openFile'], filters: [{ name: 'Files', extensions }] })
     return r.canceled ? null : r.filePaths[0]
   })
-  ipcMain.handle(IPC.importLegacy, async () => {
-    const r = await dialog.showOpenDialog(win!, { title: 'Pick your old OBS-Master-Controller.config.json', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
-    if (r.canceled) return { ok: false }
-    try {
-      const imported = store.fromFileObject(JSON.parse(readFileSync(r.filePaths[0], 'utf8')))
-      const before = store.get()
-      const after = store.set(imported)
-      log.info(`Imported settings from ${r.filePaths[0]}`)
-      afterConfigChange(before, after)
-      return { ok: true, config: after }
-    } catch (e) {
-      log.error(`Import failed: ${(e as Error).message}`)
-      return { ok: false, error: (e as Error).message }
-    }
-  })
-
-
   // Developer-only: OMC_SCREENSHOT=/path/file.png saves a picture of the window after a few seconds (used for UI checks).
   if (process.env['OMC_SCREENSHOT']) {
     const out = process.env['OMC_SCREENSHOT']
     setTimeout(async () => {
       try {
         win?.show()
+        if (process.env['OMC_SMALL']) win?.setSize(820, 560)
+        await new Promise((r) => setTimeout(r, 500))
         const img = await win!.webContents.capturePage()
         require('fs').writeFileSync(out, img.toPNG())
         if (process.env['OMC_SCREENSHOT_TABS']) {
@@ -360,6 +364,7 @@ function main() {
     quitting = true
     log.info('Shutting down ...')
     controller.dispose()
+    dock.close()
     obs.stop()
     driver.stop()
     store.close()
