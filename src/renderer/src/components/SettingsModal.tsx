@@ -260,6 +260,10 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                   </label>
                 </div>
 
+                <div className="mb-3 rounded-md border border-dashed border-line px-3 py-2 text-xs text-mute">
+                  <b className="text-ink">Seamless Mode - work in progress.</b> A mode that holds on a picture while the camera moves is being built as an OBS plugin and will return in a later update.
+                </div>
+
                 {d.transitions.crossGroupMode === 'fast' && (
                   <div className="flex items-end gap-3">
                     <div className="flex-1">

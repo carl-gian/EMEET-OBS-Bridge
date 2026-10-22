@@ -1,0 +1,103 @@
+name: Build OBS plugin
+
+# Builds the EMEET-OBS Bridge Transition plugin for ONE pinned OBS version (see obs-plugin/buildspec.json).
+# Tags named plugin-<version> (for example plugin-1.0.0) publish a GitHub pre-release holding the zip and plugin-manifest.json.
+# Plugin tags must never start with "v": those start the Bridge app release workflow.
+on:
+  push:
+    tags: ['plugin-*']
+    branches: [main]
+    paths:
+      - 'obs-plugin/**'
+      - '.github/workflows/obs-plugin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: obs-plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read build spec
+        id: spec
+        shell: pwsh
+        run: |
+          $spec = Get-Content buildspec.json -Raw | ConvertFrom-Json
+          "plugin=$($spec.version)" >> $env:GITHUB_OUTPUT
+          "obs=$($spec.obsVersion)" >> $env:GITHUB_OUTPUT
+          "name=$($spec.name)" >> $env:GITHUB_OUTPUT
+
+      - name: Check the tag matches the plugin version
+        if: startsWith(github.ref, 'refs/tags/plugin-')
+        shell: pwsh
+        run: |
+          $expected = "plugin-${{ steps.spec.outputs.plugin }}"
+          if ("${{ github.ref_name }}" -ne $expected) { throw "Tag '${{ github.ref_name }}' does not match buildspec.json version (expected '$expected')." }
+
+      - name: Build
+        shell: pwsh
+        run: ./.github/scripts/Build-Windows.ps1 -Target x64 -Configuration Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = '${{ steps.spec.outputs.name }}'
+          $ver  = '${{ steps.spec.outputs.plugin }}'
+          $obs  = '${{ steps.spec.outputs.obs }}'
+          $root = "release/Release/$name"
+          if (-not (Test-Path $root)) { Get-ChildItem -Recurse release | ForEach-Object FullName; throw "Build output not found at $root" }
+
+          Remove-Item package -Recurse -Force -ErrorAction SilentlyContinue
+          $stage = "package/$name"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "$root/*" $stage -Recurse
+          New-Item -ItemType Directory -Force symbols | Out-Null
+          Get-ChildItem $stage -Recurse -Filter *.pdb | ForEach-Object { Move-Item $_.FullName symbols -Force }
+          if (-not (Test-Path "$stage/bin/64bit/$name.dll")) { Get-ChildItem -Recurse $stage | ForEach-Object FullName; throw "DLL missing from package" }
+          if (-not (Test-Path "$stage/data/emeet_bridge_hold.effect")) { throw "Shader file missing from package" }
+
+          # plugin.json travels with the DLL so the Bridge can tell which OBS this build is for
+          [ordered]@{ schema = 1; plugin = $ver; obs = $obs; kind = 'emeet_bridge_hold_transition'; minBridge = '1.1.0'; layout = 'legacy' } |
+            ConvertTo-Json | Set-Content "$stage/plugin.json" -Encoding utf8
+
+          $zip = "$name-$ver-obs$obs-windows-x64.zip"
+          Compress-Archive -Path $stage -DestinationPath "package/$zip" -Force
+          $sha = (Get-FileHash "package/$zip" -Algorithm SHA256).Hash.ToLower()
+
+          # the manifest the Bridge reads: one entry, the current plugin for the current OBS
+          $url = "https://github.com/${{ github.repository }}/releases/download/plugin-$ver/$zip"
+          [ordered]@{ schema = 1; plugin = $ver; obs = $obs; url = $url; sha256 = $sha; layout = 'legacy'; minBridge = '1.1.0'; file = $zip } |
+            ConvertTo-Json | Set-Content "package/plugin-manifest.json" -Encoding utf8
+          Get-Content package/plugin-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emeet-bridge-transition-obs${{ steps.spec.outputs.obs }}
+          path: |
+            obs-plugin/package/*.zip
+            obs-plugin/package/plugin-manifest.json
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-symbols
+          path: obs-plugin/symbols
+          if-no-files-found: ignore
+
+      # Pre-release + not "latest": the Bridge app's own updater must never see this as an app release.
+      - name: Publish plugin release
+        if: startsWith(github.ref, 'refs/tags/plugin-')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" (Get-ChildItem package/*.zip) package/plugin-manifest.json `
+            --title "OBS plugin ${{ steps.spec.outputs.plugin }} (for OBS ${{ steps.spec.outputs.obs }})" `
+            --notes "EMEET-OBS Bridge Transition plugin ${{ steps.spec.outputs.plugin }}, built for OBS Studio ${{ steps.spec.outputs.obs }} only. Installed by the Bridge app." `
+            --prerelease --latest=false

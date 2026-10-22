@@ -77,6 +77,7 @@ and prepares the next one when the transition ends.
 |---|---|
 | **Same preset group** (e.g. Close Up to Full Stage) | Plain **Fade**, 1000 ms. The camera is not touched. |
 | **Different preset group**, *Fast Mode (Fade to Black)* | **Fade to Black** (configurable duration and switch point), 1000 ms by default. The EMEET preset is clicked as soon as the transition starts (configurable delay, default 0 ms), so the camera moves while the screen dips to black. For a slow camera, a longer fade with a later switch point (for example 2800 ms and 80 %) keeps the old scene dimming until the camera has settled. |
+| **Different preset group**, *Seamless Mode* | **Work in progress.** A mode that fades to a picture of your choice, holds it while the camera moves, then fades to the next scene, planned as an OBS plugin installed and managed by this app. It was removed from the app in 1.0.4 until the plugin is ready. |
 | **Another program** switches the OBS Program scene directly (e.g. Meeting Media Manager), without using Preview | The app clicks the right preset as soon as OBS reports the new Program scene ("quick fire"). OBS reports this up to about 1 s into a 1000 ms fade; that is an OBS limit. |
 | The early guess was wrong (Preview was stale) | The app corrects it immediately with the right preset. |
 | Camera is already on that preset | Nothing happens. |

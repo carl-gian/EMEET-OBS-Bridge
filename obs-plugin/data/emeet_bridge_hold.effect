@@ -1,0 +1,52 @@
+uniform float4x4 ViewProj;
+uniform texture2d tex;
+uniform texture2d img;
+uniform float     swp;
+uniform float2    img_size;
+uniform float     has_img;
+
+sampler_state textureSampler {
+	Filter    = Linear;
+	AddressU  = Clamp;
+	AddressV  = Clamp;
+};
+
+struct VertData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertData VSDefault(VertData v_in)
+{
+	VertData vert_out;
+	vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	vert_out.uv  = v_in.uv;
+	return vert_out;
+}
+
+// Mixes the scene (tex) with the picture (img) by swp (0 = scene, 1 = picture).
+// The picture is fitted inside the canvas (letterboxed on black); no picture = plain black.
+float4 PSHoldImage(VertData v_in) : TARGET
+{
+	float4 base = tex.Sample(textureSampler, v_in.uv);
+
+	float2 offset = (1.0 - img_size) * 0.5;
+	float2 iuv    = (v_in.uv - offset) / img_size;
+	float4 c      = img.Sample(textureSampler, iuv);
+
+	float inside = step(0.0, iuv.x) * step(iuv.x, 1.0) * step(0.0, iuv.y) * step(iuv.y, 1.0) * has_img;
+
+	// The picture is premultiplied, so its rgb is already "over black".
+	float4 card = float4(c.rgb * inside, 1.0);
+
+	return lerp(base, card, swp);
+}
+
+technique HoldImage
+{
+	pass
+	{
+		vertex_shader = VSDefault(v_in);
+		pixel_shader  = PSHoldImage(v_in);
+	}
+}
