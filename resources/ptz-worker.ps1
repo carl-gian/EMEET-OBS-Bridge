@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 ================================================================================
- ptz-worker.ps1  -  resident EMEET click helper for EMEET–OBS Bridge
+ ptz-worker.ps1  -  resident EMEET click helper for EMEET-OBS Bridge
  Derived from the proven EMEET-Background.ps1 (same Win32 window handling and
  PostMessage background clicks), but started ONCE and kept running, so a click
  happens ~tens of ms after the command instead of 3-7 s (no per-click startup).
@@ -77,7 +77,13 @@ public static class EmeetWin {
 try { [void][EmeetWin]::SetProcessDPIAware() } catch { }
 
 $script:hwnd = [IntPtr]::Zero
-$ignoreClass = '^(IME|MSCTFIME|GDI\+ Hook|Default IME|tooltips_class|WorkerW|Progman)'
+# Chrome_WidgetWin = Electron/Chromium windows, i.e. the bridge's own window. Never treat those as EMEET.
+$ignoreClass = '^(IME|MSCTFIME|GDI\+ Hook|Default IME|tooltips_class|WorkerW|Progman|Chrome_WidgetWin)'
+
+# The bridge itself is called "EMEET-OBS Bridge", so a name match on *Emeet* also hits the bridge's own process.
+# The app passes its own PID in OMC_PARENT_PID; every process with the same name as the bridge is excluded.
+$script:selfName = ''
+try { $script:selfName = (Get-Process -Id ([int]$env:OMC_PARENT_PID) -ErrorAction Stop).ProcessName } catch { }
 
 function Get-EmeetWindow {
     param($em)
@@ -85,12 +91,12 @@ function Get-EmeetWindow {
     if (-not $procName) { $procName = 'Emeet' }
     if ($procName -notmatch '[\*\?]') { $procName = "*$procName*" }
     $titleLike = [string]$em.windowTitleLike
-    $pids = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like $procName } | ForEach-Object { [uint32]$_.Id })
+    $pids = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like $procName -and $_.Id -ne $PID -and (-not $script:selfName -or $_.ProcessName -ne $script:selfName) } | ForEach-Object { [uint32]$_.Id })
     $cands = foreach ($h in [EmeetWin]::TopLevel()) {
         $cls = [EmeetWin]::Class($h); $ttl = [EmeetWin]::Title($h)
         if ($cls -match $ignoreClass) { continue }
         $byPid   = $pids -contains [EmeetWin]::Pid($h)
-        $byTitle = $titleLike -and ($ttl -like $titleLike)
+        $byTitle = $titleLike -and ($ttl -like $titleLike) -and ([EmeetWin]::Pid($h) -ne [uint32]$env:OMC_PARENT_PID)
         if (-not ($byPid -or $byTitle)) { continue }
         if ([string]::IsNullOrWhiteSpace($ttl)) { continue }
         $r = New-Object EmeetRect; [void][EmeetWin]::GetWindowRect($h, [ref]$r)
@@ -108,7 +114,9 @@ function Ensure-EmeetWindow {
 
     if ($h -eq [IntPtr]::Zero) {
         $exe = [string]$em.exePath
+        if (-not $em.launchOnStart) { throw 'EMEET Studio is not running. Open it, or turn on "Open EMEET Studio when this app starts" in Settings > General.' }
         if ([string]::IsNullOrWhiteSpace($exe)) { throw 'EMEET window not found and no EMEET Studio path is set (Settings > General).' }
+        if (-not (Test-Path -LiteralPath $exe)) { throw "EMEET Studio program not found at: $exe" }
         Log "EMEET not running -> launching $exe"
         Start-Process -FilePath $exe | Out-Null
         $timeout = [int]$em.launchTimeoutSec; if ($timeout -le 0) { $timeout = 20 }

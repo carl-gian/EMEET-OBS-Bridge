@@ -100,7 +100,7 @@ in Settings > Camera.
 - Lives in the **system tray**. Closing or minimising the window hides it to the tray; it keeps running.
 - **Hides in the tray at startup** (on by default; switch off in Settings > General to open the window at launch).
 - Only one copy can run; starting it again brings the existing window forward.
-- Tray menu: status, show window, resync camera, check for updates / restart to update, open logs folder, export diagnostics, quit (asks to confirm).
+- Tray menu: status, show window, resync camera, check for updates / restart to update, open logs folder, send diagnostics, quit (asks to confirm).
 - Main window shows connection status for OBS and the camera, the Program/Preview scenes, the current EMEET preset, and a live log.
 
 **Scene Manager and settings**
@@ -110,14 +110,14 @@ in Settings > Camera.
 - Settings are saved as a JSON file and edits made to the file by hand are picked up while the app is running.
 
 **OBS dock**
-- A small control panel you can place inside OBS (status, Resync, Open settings). It is served only on your own PC
+- A small control panel you can place inside OBS: OBS and EMEET status badges, and the **scene in Preview**, where you choose its EMEET preset and tracking. A change is saved straight away and applies when you press Transition. It also has Resync camera and Open app buttons. It is served only on your own PC
   (`127.0.0.1:4577`), runs outside OBS so it cannot slow OBS or the camera timing, and only works while this app is running.
 
 **Reliability and support**
 - Reconnects to OBS indefinitely; survives OBS and EMEET restarts.
 - Rolling log files (5 files x 5 MB) with timestamps; PTZ lines show the preset, window handle and timing so clicks can be audited.
 - The first log line states the build number so you can confirm which version is running.
-- **Export diagnostics**: one zip with logs, settings (password removed), versions and state, to send for support.
+- **Send diagnostics** (Settings > General > Support): prepares one zip with logs, settings (password removed), versions and state, and opens your email with the message ready. **Export diagnostics** just saves the zip.
 - **Dry run**: logs every decision but sends nothing to OBS or the camera. It is never saved and is off at every start.
 - **Auto-update** from GitHub Releases (see [Updates](#updates)).
 
@@ -129,7 +129,7 @@ Open the main window and press **Settings**.
 
 | Tab | What is there |
 |---|---|
-| **General** | EMEET Studio path; OBS path; open OBS at app start; hide in the tray at app start; log detail (Debug/Info/Warn/Error); Dry run. |
+| **General** | EMEET Studio path and "open EMEET Studio when this app starts" (off by default); OBS path; open OBS at app start; start this app when Windows starts (off by default); hide in the tray at app start; log detail (Debug/Info/Warn/Error); Dry run. |
 | **OBS** | Server address, port, password (stored only on this PC), connect/request timeouts, and the name/URL to paste into OBS for the dock. |
 | **Transition Rules** | Same-preset transition; different-preset mode (**Fast** or **Seamless**) with names and durations; camera click delay (Fast Mode); Seamless scene name, fade-out, hold and fade-in times; behaviour switches (Studio Mode warning, clear per-scene overrides on connect, prepare next transition after one ends, click the live scene's preset when connecting). |
 | **Camera** | Preset button positions (screen pixels), preset count, tracking buttons, EMEET window position and size, keep EMEET behind other windows, and the master "Camera automation on" switch. |
@@ -174,7 +174,7 @@ The app clicks the EMEET preset buttons by **screen position**, and moves the EM
 | Clicks land in the wrong place | Display is not 1080p / scaling changed. Re-measure positions. |
 | A scene never moves the camera | It is not assigned to a preset, or its name does not match OBS exactly (look for the startup warning in the log). |
 
-Press **Open logs** or use the tray menu to open the log folder; **Export diagnostics** creates a zip to share.
+Press **Open logs** or use the tray menu to open the log folder; **Send diagnostics** in Settings > General > Support creates a zip to share.
 
 ---
 

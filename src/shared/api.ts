@@ -16,6 +16,7 @@ export interface Api {
   reconnect(): Promise<void>
   openLogs(): Promise<void>
   exportDiagnostics(): Promise<DiagnosticsResult>
+  sendDiagnostics(): Promise<DiagnosticsResult>
   browseFile(title: string, extensions: string[]): Promise<string | null>
   clearLogView(): Promise<void>
   getLaunchInfo(): Promise<LaunchInfo>

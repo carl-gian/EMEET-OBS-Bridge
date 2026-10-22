@@ -61,7 +61,9 @@ export class PowerShellDriver implements EmeetDriver {
     this.log.info(`Starting PTZ helper: powershell.exe -File "${script}"`)
     const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
       windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // The helper must never mistake the bridge's own window for EMEET Studio (the bridge's name contains "EMEET").
+      env: { ...process.env, OMC_PARENT_PID: String(process.pid) }
     })
     this.proc = p
     p.stdout.setEncoding('utf8')

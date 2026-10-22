@@ -23,6 +23,7 @@ describe('changelog', () => {
     expect(launchInfo('0.2.1', '1.0.0').kind).toBe('updated')
     expect(launchInfo('1.0.0', '1.0.0').kind).toBe('normal')
     expect(launchInfo('1.0.0', '0.2.1').kind).toBe('normal') // downgrade: stay quiet
-    expect(launchInfo('1.0.0', '1.0.1', CHANGELOG).kind).toBe('normal') // no notes for 0.3.1
+    expect(launchInfo('1.0.0', '1.0.1').kind).toBe('updated')
+    expect(launchInfo('1.0.1', '9.9.9').kind).toBe('normal') // a version with no notes stays quiet
   })
 })

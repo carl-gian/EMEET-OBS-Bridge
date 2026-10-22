@@ -44,6 +44,8 @@ export interface AppConfig {
     launchObsOnStart: boolean
     /** Start minimized to the tray instead of showing the window. */
     startHidden: boolean
+    /** Launch this app when the user signs in to Windows. */
+    startWithWindows: boolean
   }
   obs: {
     host: string
@@ -76,6 +78,8 @@ export interface AppConfig {
     processName: string
     windowTitleLike: string
     exePath: string
+    /** Open EMEET Studio when this app starts, and again if it is closed when a camera click is needed. Off = never launch it. */
+    launchOnStart: boolean
     layout: { x: number; y: number; width: number; height: number }
     launchTimeoutSec: number
     coordSpace: 'screen' | 'client'
@@ -140,6 +144,8 @@ export interface AppState {
 export interface DiagnosticsResult {
   ok: boolean
   path?: string
+  /** The email app was opened with the message already written (the user attaches the zip). */
+  emailOpened?: boolean
   error?: string
 }
 
@@ -160,6 +166,7 @@ export const IPC = {
   reconnect: 'obs:reconnect',
   openLogs: 'app:open-logs',
   exportDiagnostics: 'app:export-diagnostics',
+  sendDiagnostics: 'app:send-diagnostics',
   browseFile: 'app:browse-file',
   clearLogsView: 'log:clear',
   getLaunchInfo: 'app:launch-info',

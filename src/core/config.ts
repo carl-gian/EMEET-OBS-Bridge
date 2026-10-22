@@ -1,5 +1,5 @@
 import type { AppConfig, Point, PresetCfg } from '@shared/types'
-import { defaultConfig } from './defaults'
+import { DEFAULT_EMEET_EXE, defaultConfig } from './defaults'
 import { DEFAULT_PRESETS, MAX_PRESETS, MIN_PRESETS, presetNumber } from '@shared/presets'
 
 type Obj = Record<string, any>
@@ -129,7 +129,9 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
     cfg.ptz.fireOffsetMs = 0
     warnings.push('Settings updated: Fast Mode camera click offset changed from 200 ms to 0 ms (immediate). You can change it in Settings > Transition Rules.')
   }
-  cfg.configVersion = 2
+  // Version 3: EMEET Studio path has a default (older configs had it empty).
+  if (fromVersion < 3 && !cfg.emeet.exePath) cfg.emeet.exePath = DEFAULT_EMEET_EXE
+  cfg.configVersion = 3
 
   if (isObj(raw.sceneTracking)) {
     const t: Record<string, boolean> = {}

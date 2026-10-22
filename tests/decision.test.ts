@@ -68,18 +68,27 @@ describe('config migration', () => {
     expect(config.presets.Preset8.x).toBe(1222)
     expect(config.presets.Preset1.x).toBe(1)
   })
-  it('old 200 ms offset becomes 0 once; Black Bridge settings become Seamless; removed options vanish', () => {
+  it('old 200 ms offset becomes 0 once; Black Bridge settings become Seamless; unknown options vanish', () => {
     const { config, warnings } = normalizeConfig({
       ptz: { fireOffsetMs: 200 },
       transitions: { crossGroupMode: 'blackBridge' },
       blackBridge: { sceneName: 'BLK', holdMs: 2500 },
-      general: { startWithWindows: true, obsPath: 'C:\\obs.exe' }
+      general: { someRemovedOption: true, obsPath: 'C:\\obs.exe' }
     })
     expect(config.ptz.fireOffsetMs).toBe(0)
     expect(warnings.some((w) => /200 ms to 0 ms/.test(w))).toBe(true)
     expect(config.transitions.crossGroupMode).toBe('seamless')
     expect(config.seamless).toMatchObject({ sceneName: 'BLK', holdMs: 2500, fadeToBlackMs: 800, fadeInMs: 800 })
-    expect((config.general as any).startWithWindows).toBeUndefined()
+    expect((config.general as any).someRemovedOption).toBeUndefined()
     expect(normalizeConfig({ configVersion: 2, ptz: { fireOffsetMs: 200 } }).config.ptz.fireOffsetMs).toBe(200)
+  })
+  it('EMEET Studio path defaults in, and the launch/start-up switches are OFF by default', () => {
+    const d = defaultConfig()
+    expect(d.emeet.exePath).toBe('C:\\Program Files\\EMEET STUDIO\\bin\\64bit\\EMEET STUDIO.exe')
+    expect(d.emeet.launchOnStart).toBe(false)
+    expect(d.general.startWithWindows).toBe(false)
+    // an older config with an empty path gets the default once; a path the owner chose is kept
+    expect(normalizeConfig({ configVersion: 2, emeet: { exePath: '' } }).config.emeet.exePath).toBe(d.emeet.exePath)
+    expect(normalizeConfig({ configVersion: 2, emeet: { exePath: 'D:\\E.exe' } }).config.emeet.exePath).toBe('D:\\E.exe')
   })
 })

@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.1',
+    date: '2026-10-22',
+    items: [
+      'Fixed: pressing Resync camera could move and resize this app\'s own window onto the EMEET Studio position. The app now never mistakes itself for EMEET Studio.',
+      'EMEET Studio path is filled in by default, with a new switch (off by default) to open EMEET Studio when this app starts.',
+      'New switch: start this app when Windows starts (off by default).',
+      'New "Send diagnostics" button in Settings > General > Support.',
+      'OBS dock redesigned: small OBS and EMEET status badges, and you can choose the EMEET preset and tracking for the scene in Preview. Changes apply when you press Transition.'
+    ]
+  },
+  {
     version: '1.0.0',
     date: '2026-10-22',
     items: [

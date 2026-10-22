@@ -90,10 +90,13 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
           {/* ------------------------------------------------------------ General */}
           {tab === 'general' && (
             <>
-              <Field label="EMEET Studio path" hint="The EMEET Studio .exe. Used to open it automatically if it is not running when a camera click is needed.">
+              <Field label="EMEET Studio path" hint="Where EMEET Studio is installed. Only used if the switch below is on.">
                 <div className="flex gap-2">
-                  <TextInput value={d.emeet.exePath} onChange={(v) => edit((c) => (c.emeet.exePath = v))} placeholder="C:\Program Files\EMEET Studio\Emeet.exe" mono />
+                  <TextInput value={d.emeet.exePath} onChange={(v) => edit((c) => (c.emeet.exePath = v))} placeholder="C:\Program Files\EMEET STUDIO\bin\64bit\EMEET STUDIO.exe" mono />
                   <Button onClick={() => browse('Pick the EMEET Studio program', ['exe'], (p) => edit((c) => (c.emeet.exePath = p)))}>Browse</Button>
+                </div>
+                <div className="mt-2">
+                  <Switch checked={d.emeet.launchOnStart} onChange={(v) => edit((c) => (c.emeet.launchOnStart = v))} label="Open EMEET Studio when this app starts (and again if it is closed)" />
                 </div>
               </Field>
               <Field label="OBS Studio path" hint="The OBS .exe (usually ...\obs-studio\bin\64bit\obs64.exe).">
@@ -104,6 +107,9 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
               </Field>
               <div className="mb-5">
                 <Switch checked={d.general.launchObsOnStart} onChange={(v) => edit((c) => (c.general.launchObsOnStart = v))} label="Open OBS when this app starts (if it is not already running)" />
+              </div>
+              <div className="mb-5">
+                <Switch checked={d.general.startWithWindows} onChange={(v) => edit((c) => (c.general.startWithWindows = v))} label="Start this app when Windows starts" />
               </div>
               <div className="mb-5">
                 <Switch checked={d.general.startHidden} onChange={(v) => edit((c) => (c.general.startHidden = v))} label="Hide in the tray when this app starts" />
@@ -141,11 +147,22 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                 <div className="mb-1 flex items-center text-sm font-medium">
                   Support
                   <HelpTip title="Support">
-                    <b>Export diagnostics</b> saves one zip with the logs, your settings (the OBS password is removed) and version numbers. Send it when something is not working.
+                    <b>Send diagnostics</b> prepares one zip and opens your email with the message ready; attach the zip and send. <b>Export diagnostics</b> just saves the zip where you choose. Either way the zip holds the logs, your settings (the OBS password is removed) and version numbers.
                     <b> Open logs folder</b> shows the raw log files.
                   </HelpTip>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    kind="primary"
+                    onClick={async () => {
+                      const r = await window.api.sendDiagnostics()
+                      if (r.ok && r.emailOpened) setMsg('Your email app opened. Attach the highlighted zip file and press Send.')
+                      else if (r.ok) setMsg('Diagnostics saved and shown in its folder. Send that zip file when asking for help.')
+                      else if (r.error) setMsg('Could not prepare diagnostics: ' + r.error)
+                    }}
+                  >
+                    Send diagnostics ...
+                  </Button>
                   <Button
                     onClick={async () => {
                       const r = await window.api.exportDiagnostics()

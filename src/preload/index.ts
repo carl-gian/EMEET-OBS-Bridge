@@ -16,6 +16,7 @@ const api: Api = {
   reconnect: () => ipcRenderer.invoke(IPC.reconnect),
   openLogs: () => ipcRenderer.invoke(IPC.openLogs),
   exportDiagnostics: () => ipcRenderer.invoke(IPC.exportDiagnostics),
+  sendDiagnostics: () => ipcRenderer.invoke(IPC.sendDiagnostics),
   browseFile: (title, extensions) => ipcRenderer.invoke(IPC.browseFile, title, extensions),
   clearLogView: () => ipcRenderer.invoke(IPC.clearLogsView),
   getLaunchInfo: () => ipcRenderer.invoke(IPC.getLaunchInfo),

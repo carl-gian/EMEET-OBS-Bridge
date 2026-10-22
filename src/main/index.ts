@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
 import { exec, spawn } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
 import { is } from './is'
 import { IPC } from '@shared/types'
@@ -15,6 +15,7 @@ import { buildDiagnosticsZip } from './diagnostics'
 import { startDock } from './dock'
 import { Updater } from './updater'
 import { launchInfo } from '@shared/changelog'
+import { SUPPORT_EMAIL } from '@shared/support'
 import { readLastSeenVersion, writeLastSeenVersion } from './appState'
 
 const isWin = process.platform === 'win32'
@@ -103,17 +104,19 @@ function main() {
   log.info(
     `Settings: OBS ws://${c0.obs.host}:${c0.obs.port} | intra '${c0.transitions.intraGroup.name}' ${c0.transitions.intraGroup.durationMs} ms | cross '${c0.transitions.crossGroup.name}' ${c0.transitions.crossGroup.durationMs} ms | mode ${c0.transitions.crossGroupMode} | click offset ${c0.ptz.fireOffsetMs} ms`
   )
-  // "Start with Windows" was removed: clear any startup entry an earlier build may have registered.
-  if (app.isPackaged && isWin) {
+  // "Start this app when Windows starts" follows the setting (installed Windows builds only).
+  function applyStartWithWindows(cfg: AppConfig) {
+    if (!app.isPackaged || !isWin) return
     try {
-      if (app.getLoginItemSettings().openAtLogin) {
-        app.setLoginItemSettings({ openAtLogin: false })
-        log.info('Removed the old "start with Windows" entry.')
+      if (app.getLoginItemSettings().openAtLogin !== cfg.general.startWithWindows) {
+        app.setLoginItemSettings({ openAtLogin: cfg.general.startWithWindows })
+        log.info(`Start with Windows: ${cfg.general.startWithWindows ? 'on' : 'off'}`)
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn(`Could not change the Windows start-up setting: ${(e as Error).message}`)
     }
   }
+  applyStartWithWindows(c0)
 
   // ---- camera driver ----
   const driver: EmeetDriver = isWin ? new PowerShellDriver(log, ptzLog, emeetLog) : new MockDriver(ptzLog, emeetLog)
@@ -164,7 +167,7 @@ function main() {
   log.info(`Launch: ${launch.kind}${launch.from ? ` (previously ${launch.from})` : ''}`)
   createWindow(c0.general.startHidden && launch.kind === 'normal')
   createTray()
-  const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow })
+  const dock = startDock({ log, getState: buildState, getConfig: () => store.get(), resync: () => controller.resyncPtz(), openWindow: showWindow, setScenePreset: setSceneMapping, setSceneTracking })
 
   // ---- start everything ----
   driver.start(c0.emeet)
@@ -213,7 +216,7 @@ function main() {
           : { label: updater.status === 'downloading' ? `Downloading update ${updater.availableVersion} ...` : 'Check for updates', enabled: updater.status !== 'downloading', click: () => updater.check(true) },
         { type: 'separator' },
         { label: 'Open logs folder', click: () => void shell.openPath(logDir) },
-        { label: 'Export diagnostics ...', click: () => void exportDiagnostics() },
+        { label: 'Send diagnostics ...', click: () => void sendDiagnostics() },
         { type: 'separator' },
         { label: 'Quit ...', click: () => void confirmQuit() }
       ])
@@ -235,28 +238,52 @@ function main() {
     if (r.response === 1) app.quit()
   }
 
+  const diagStamp = () => new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
+  function writeDiagnostics(zipPath: string) {
+    buildDiagnosticsZip({
+      zipPath,
+      logDir,
+      cfg: store.get(),
+      state: buildState(),
+      versions: { app: version, electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
+      configPath: store.path
+    })
+    log.info(`Diagnostics exported: ${zipPath}`)
+  }
+
   async function exportDiagnostics() {
-    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)
     const r = await dialog.showSaveDialog({
       title: 'Save diagnostics zip',
-      defaultPath: join(app.getPath('desktop'), `EMEET-OBS-Bridge-diagnostics-${stamp}.zip`),
+      defaultPath: join(app.getPath('desktop'), `EMEET-OBS-Bridge-diagnostics-${diagStamp()}.zip`),
       filters: [{ name: 'Zip', extensions: ['zip'] }]
     })
     if (r.canceled || !r.filePath) return { ok: false }
     try {
-      buildDiagnosticsZip({
-        zipPath: r.filePath,
-        logDir,
-        cfg: store.get(),
-        state: buildState(),
-        versions: { app: version, electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
-        configPath: store.path
-      })
-      log.info(`Diagnostics exported: ${r.filePath}`)
+      writeDiagnostics(r.filePath)
       shell.showItemInFolder(r.filePath)
       return { ok: true, path: r.filePath }
     } catch (e) {
       log.error(`Diagnostics export failed: ${(e as Error).message}`)
+      return { ok: false, error: (e as Error).message }
+    }
+  }
+
+  /** Saves the zip, shows it in its folder and opens the email app with the message ready; the user attaches the zip and sends. */
+  async function sendDiagnostics() {
+    try {
+      const dir = join(app.getPath('userData'), 'diagnostics')
+      mkdirSync(dir, { recursive: true })
+      const zipPath = join(dir, `EMEET-OBS-Bridge-diagnostics-${diagStamp()}.zip`)
+      writeDiagnostics(zipPath)
+      shell.showItemInFolder(zipPath)
+      if (!SUPPORT_EMAIL) return { ok: true, path: zipPath, emailOpened: false }
+      const subject = `EMEET-OBS Bridge ${version} diagnostics`
+      const body = `Hi,\r\n\r\nI am sending diagnostics from EMEET-OBS Bridge ${version}.\r\nThe zip file is attached (it is highlighted in the folder that just opened: ${zipPath}).\r\n\r\nWhat happened:\r\n`
+      await shell.openExternal(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`)
+      log.info('Diagnostics email opened.')
+      return { ok: true, path: zipPath, emailOpened: true }
+    } catch (e) {
+      log.error(`Send diagnostics failed: ${(e as Error).message}`)
       return { ok: false, error: (e as Error).message }
     }
   }
@@ -284,9 +311,32 @@ function main() {
     }
   }
 
+  function setSceneMapping(scene: string, presetId: string | null) {
+    const before = store.get()
+    const after = store.update((c) => {
+      // drop any older spelling of the same scene (spacing/dash differences) so there is only one entry
+      for (const k of Object.keys(c.scenes)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.scenes[k]
+      if (presetId) c.scenes[scene] = presetId
+    })
+    log.info(`Scene mapping: '${scene}' -> ${presetId ?? 'None'}`)
+    afterConfigChange(before, after)
+    return after
+  }
+  function setSceneTracking(scene: string, on: boolean) {
+    const before = store.get()
+    const after = store.update((c) => {
+      for (const k of Object.keys(c.sceneTracking)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.sceneTracking[k]
+      if (on) c.sceneTracking[scene] = true
+    })
+    log.info(`Scene tracking: '${scene}' -> ${on ? 'ON' : 'off'}`)
+    afterConfigChange(before, after)
+    return after
+  }
+
   function afterConfigChange(before: AppConfig, after: AppConfig) {
     logger.level = after.logging.level
     controller.onConfigChanged()
+    applyStartWithWindows(after)
     if (JSON.stringify(before.obs) !== JSON.stringify(after.obs)) obs.reconnect()
     if (JSON.stringify(before.emeet) !== JSON.stringify(after.emeet) && after.emeet.enabled) driver.ensure(after.emeet)
     win?.webContents.send('config:push', after)
@@ -304,27 +354,8 @@ function main() {
     afterConfigChange(before, after)
     return after
   })
-  ipcMain.handle(IPC.setSceneMapping, (_e, scene: string, presetId: string | null) => {
-    const before = store.get()
-    const after = store.update((c) => {
-      // drop any older spelling of the same scene (spacing/dash differences) so there is only one entry
-      for (const k of Object.keys(c.scenes)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.scenes[k]
-      if (presetId) c.scenes[scene] = presetId
-    })
-    log.info(`Scene mapping: '${scene}' -> ${presetId ?? 'None'}`)
-    afterConfigChange(before, after)
-    return after
-  })
-  ipcMain.handle(IPC.setSceneTracking, (_e, scene: string, on: boolean) => {
-    const before = store.get()
-    const after = store.update((c) => {
-      for (const k of Object.keys(c.sceneTracking)) if (normalizeSceneKey(k) === normalizeSceneKey(scene)) delete c.sceneTracking[k]
-      if (on) c.sceneTracking[scene] = true
-    })
-    log.info(`Scene tracking: '${scene}' -> ${on ? 'ON' : 'off'}`)
-    afterConfigChange(before, after)
-    return after
-  })
+  ipcMain.handle(IPC.setSceneMapping, (_e, scene: string, presetId: string | null) => setSceneMapping(scene, presetId))
+  ipcMain.handle(IPC.setSceneTracking, (_e, scene: string, on: boolean) => setSceneTracking(scene, on))
   ipcMain.handle(IPC.setTrackingEnabled, (_e, on: boolean) => {
     const before = store.get()
     const after = store.update((c) => (c.tracking.enabled = on))
@@ -354,6 +385,7 @@ function main() {
   ipcMain.handle(IPC.reconnect, () => obs.reconnect())
   ipcMain.handle(IPC.openLogs, () => shell.openPath(logDir))
   ipcMain.handle(IPC.exportDiagnostics, () => exportDiagnostics())
+  ipcMain.handle(IPC.sendDiagnostics, () => sendDiagnostics())
   ipcMain.handle(IPC.clearLogsView, () => logger.clearView())
   ipcMain.handle(IPC.getLaunchInfo, () => launch)
   ipcMain.handle(IPC.ackLaunchInfo, () => writeLastSeenVersion(version))

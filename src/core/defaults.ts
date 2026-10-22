@@ -1,11 +1,13 @@
 import type { AppConfig } from '@shared/types'
 import { DEFAULT_PRESETS, MIN_PRESETS } from '@shared/presets'
 
+export const DEFAULT_EMEET_EXE = 'C:\\Program Files\\EMEET STUDIO\\bin\\64bit\\EMEET STUDIO.exe'
+
 /** Shipped defaults. These mirror the owner's proven PowerShell config (the OBS password is NOT included). */
 export function defaultConfig(): AppConfig {
   return {
-    configVersion: 2,
-    general: { obsPath: '', launchObsOnStart: false, startHidden: true },
+    configVersion: 3,
+    general: { obsPath: '', launchObsOnStart: false, startHidden: true, startWithWindows: false },
     obs: {
       host: 'localhost',
       port: 4455,
@@ -50,7 +52,8 @@ export function defaultConfig(): AppConfig {
       enabled: true,
       processName: 'Emeet',
       windowTitleLike: '',
-      exePath: '',
+      exePath: DEFAULT_EMEET_EXE,
+      launchOnStart: false,
       layout: { x: 787, y: 0, width: 1140, height: 1039 },
       launchTimeoutSec: 20,
       coordSpace: 'screen',
