@@ -29,6 +29,8 @@ describe('OBS dock server', () => {
     const html = await (await fetch(`${base}/dock`)).text()
     expect(html).toContain('Scene in Preview')
     expect(html).not.toContain('id="program"')
+    expect(html).toContain('This scene will transition to the new selected preset when you transition.')
+    expect(html).toContain('OBS Studio Mode is off.')
   })
   it('reports the Preview scene, its preset and tracking, and only the presets in use', async () => {
     const s = await (await fetch(`${base}/api/state`)).json()

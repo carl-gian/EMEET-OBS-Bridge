@@ -108,9 +108,7 @@ export class Controller {
     const sm = await this.safeCall('GetStudioModeEnabled')
     this.studioMode = !!sm?.studioModeEnabled
     if (!this.studioMode) {
-      const m = 'Studio Mode is DISABLED. Preview-based pre-priming cannot work. Enable Studio Mode in OBS (camera quick-fire on program changes still works).'
-      if (this.cfg.behavior.requireStudioMode) log.error(m)
-      else log.warn(m)
+      log.error('OBS Studio Mode is OFF. EMEET-OBS Bridge needs Studio Mode to work smoothly: turn it on in OBS (the "Studio Mode" button under the Controls panel).')
     }
 
     await this.refreshSceneList()
@@ -375,7 +373,8 @@ export class Controller {
         return this.onProgramSceneChanged(data.sceneName)
       case 'StudioModeStateChanged':
         this.studioMode = !!data.studioModeEnabled
-        this.d.log.warn(`Studio Mode changed: ${this.studioMode}`)
+        if (this.studioMode) this.d.log.info('Studio Mode turned ON.')
+        else this.d.log.error('OBS Studio Mode was turned OFF. Turn it back on in OBS, or the camera and transitions will not follow your scenes properly.')
         if (this.studioMode && !this.transitionInFlight) {
           void this.safeCall('GetCurrentPreviewScene').then((v) => {
             this.previewScene = v?.currentPreviewSceneName ?? this.previewScene

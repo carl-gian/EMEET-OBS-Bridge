@@ -114,7 +114,6 @@ export default function App() {
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
           {obsText}
         </Pill>
-        {state.obs.status === 'connected' && !state.obs.studioMode && <Pill tone="bad">Studio Mode is OFF</Pill>}
         <Pill tone={drvTone}>{drvText}</Pill>
         {state.bridgeState !== 'Idle' && (
           <div className="text-xs text-warn">Seamless: {SEAMLESS_LABEL[state.bridgeState] ?? state.bridgeState}</div>
@@ -143,6 +142,13 @@ export default function App() {
           </Button>
         </div>
       </header>
+
+      {state.obs.status === 'connected' && !state.obs.studioMode && (
+        <div role="alert" className="rounded-lg border border-bad/60 bg-bad/10 px-4 py-2.5 text-[13px] text-bad">
+          <b>OBS Studio Mode is off.</b> Turn it on in OBS (the <b>Studio Mode</b> button in the Controls panel). EMEET–OBS Bridge needs it to work smoothly, so
+          transitions and camera presets will not follow your scenes properly until it is on.
+        </div>
+      )}
 
       {state.dryRun && (
         <div className="flex items-center justify-between rounded-lg border border-warn/50 bg-warn/10 px-4 py-2 text-[13px] text-warn">

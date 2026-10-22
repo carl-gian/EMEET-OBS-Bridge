@@ -149,6 +149,7 @@ const DOCK_HTML = `<!doctype html>
   .chk input{width:16px;height:16px;accent-color:var(--accent)}
   .empty{color:var(--dim);text-align:center;padding:14px 6px}
   .note{margin-top:10px;padding:7px 9px;border-radius:6px;font-size:12px;background:rgba(59,130,246,.12);color:#9cc0ff}
+  .note.err{margin:0 0 10px;background:rgba(248,81,73,.16);color:var(--bad)}
   .note.warn{background:rgba(210,153,34,.14);color:var(--warn)}
   .btns{display:flex;gap:6px;margin-top:10px}
   button{flex:1;padding:7px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text);font:inherit;cursor:pointer}
@@ -161,7 +162,8 @@ const DOCK_HTML = `<!doctype html>
     <span class="badge" id="camB"><i></i><span id="cam">EMEET ...</span></span>
     <span class="badge warn" id="dry" hidden><i></i>Dry run</span>
   </div>
-  <div class="card">
+  <div class="note err" id="sm" role="alert" hidden><b>OBS Studio Mode is off.</b> Turn it on in OBS (the Studio Mode button in the Controls panel). This app needs it to work smoothly.</div>
+  <div class="card" id="card">
     <div class="cap">Scene in Preview</div>
     <div id="empty" class="empty">Pick a scene in Preview to choose its EMEET preset.</div>
     <div id="panel" hidden>
@@ -191,7 +193,7 @@ const DOCK_HTML = `<!doctype html>
     const n = $('saved')
     if (live) { n.className = 'note warn'; n.textContent = changed ? 'Saved. This scene is live now, so press Resync camera to apply it.' : 'This scene is live now. Press Resync camera to apply a change.'; n.hidden = !changed && !live; return }
     n.className = 'note'
-    n.textContent = 'Saved. The camera will use this when you press Transition.'
+    n.textContent = 'This scene will transition to the new selected preset when you transition.'
     n.hidden = !changed
   }
 
@@ -205,7 +207,10 @@ const DOCK_HTML = `<!doctype html>
       badge('cam', d === 'ready' ? 'ok' : d === 'mock' ? '' : d === 'starting' ? 'warn' : 'bad',
         d === 'ready' ? 'EMEET detected' : d === 'mock' ? 'EMEET not checked' : d === 'starting' ? 'EMEET looking...' : 'EMEET not detected')
       $('dry').hidden = !s.dryRun
-      const has = !!s.preview && o === 'connected'
+      const smOff = o === 'connected' && !s.obs.studioMode
+      $('sm').hidden = !smOff
+      $('card').hidden = smOff
+      const has = !!s.preview && o === 'connected' && !smOff
       $('empty').hidden = has
       $('panel').hidden = !has
       if (!has) { shownScene = null; return }

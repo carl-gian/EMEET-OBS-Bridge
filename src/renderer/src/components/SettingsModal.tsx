@@ -325,7 +325,6 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
               <details className="rounded-lg border border-line p-3">
                 <summary className="cursor-pointer text-[13px] font-medium">Advanced</summary>
                 <div className="mt-3 flex flex-col gap-3">
-                  <Switch checked={d.behavior.requireStudioMode} onChange={(v) => edit((c) => (c.behavior.requireStudioMode = v))} label="Warn loudly when OBS Studio Mode is off" />
                   <Switch checked={d.behavior.clearSceneTransitionOverridesOnStart} onChange={(v) => edit((c) => (c.behavior.clearSceneTransitionOverridesOnStart = v))} label="Clear per-scene transition overrides when connecting to OBS" />
                   <Switch checked={d.behavior.reprimeOnTransitionEnd} onChange={(v) => edit((c) => (c.behavior.reprimeOnTransitionEnd = v))} label="Prepare the next transition as soon as one ends" />
                   <Switch checked={d.ptz.syncOnStartup} onChange={(v) => edit((c) => (c.ptz.syncOnStartup = v))} label="Click the live scene's EMEET preset when connecting to OBS" />
