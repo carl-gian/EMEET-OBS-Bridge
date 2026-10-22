@@ -17,7 +17,8 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # windows-latest now has Visual Studio 2026; OBS's build files ask for "Visual Studio 17 2022", which windows-2022 has.
+    runs-on: windows-2022
     defaults:
       run:
         working-directory: obs-plugin
