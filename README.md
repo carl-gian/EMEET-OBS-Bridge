@@ -12,7 +12,7 @@ at the right moment during the transition, without ever stealing focus from the 
 > **Made with AI.** This program was written with the help of AI (Claude, by Anthropic), working from my own specification
 > and tested by me on a real production setup. It is provided as is; please test it on your own rig before relying on it in a live meeting.
 
-##Screenshot of the Main Screen
+## Screenshot of the Main Screen
 <img width="1392" height="912" alt="Default Screen" src="https://github.com/user-attachments/assets/999d7904-63d1-4ca5-87ab-5e70a64c9cc5" />
 
 <img width="1392" height="912" alt="Intro Page" src="https://github.com/user-attachments/assets/91fc478c-1a1b-4d94-942b-9b3967c77346" />
