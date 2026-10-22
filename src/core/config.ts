@@ -159,6 +159,11 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   cfg.seamless.fadeToBlackMs = nonNeg(cfg.seamless.fadeToBlackMs, 800)
   cfg.seamless.fadeInMs = nonNeg(cfg.seamless.fadeInMs, 800)
   if (!['Debug', 'Info', 'Warn', 'Error'].includes(cfg.logging.level)) cfg.logging.level = 'Debug'
+  // Seamless Mode was taken out in 1.0.4 (a better plugin-based mode is planned). Anyone who had it goes back to Fast Mode.
+  if (cfg.transitions.crossGroupMode === 'seamless') {
+    cfg.transitions.crossGroupMode = 'fast'
+    warnings.push('Seamless Mode was removed in 1.0.4 - switched to Fast Mode (Settings > Transition Rules).')
+  }
   if (!['fast', 'seamless'].includes(cfg.transitions.crossGroupMode)) cfg.transitions.crossGroupMode = 'fast'
   if (!['screen', 'client'].includes(cfg.emeet.coordSpace)) cfg.emeet.coordSpace = 'screen'
 

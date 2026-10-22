@@ -158,7 +158,6 @@ const TOPICS = (entries: ChangelogEntry[]): Topic[] => [
         <ul className="mb-3 list-disc space-y-1.5 pl-5 text-[13px]">
           <li><b>Same group:</b> a plain 1 s Fade. The camera is not touched.</li>
           <li><b>Different group, Fast Mode:</b> Fade to Black, and the EMEET preset is clicked as the transition starts.</li>
-          <li><b>Different group, Seamless Mode:</b> fade to a black scene, move the camera while it is black, hold, then fade to your scene. Pick it in Settings &gt; Transition Rules.</li>
           <li><b>Another program changes the scene:</b> the camera is clicked as soon as OBS reports it.</li>
           <li><b>Press Transition when Program and Preview are the same scene:</b> re-clicks that scene's preset (a manual resync).</li>
         </ul>

@@ -21,13 +21,9 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
   const [d, setD] = useState<AppConfig>(() => JSON.parse(JSON.stringify(cfg)))
   const [showPw, setShowPw] = useState(false)
   const [msg, setMsg] = useState('')
-  const [cardPreview, setCardPreview] = useState<string | null>(null)
   const [unlocked, setUnlocked] = useState(false) // preset coordinates are locked until "Edit presets"
   const [confirmReset, setConfirmReset] = useState(false)
 
-  useEffect(() => {
-    void window.api.holdingCardPreview().then(setCardPreview)
-  }, [d.seamless.cardImage])
   const switchPoint = Number(d.transitions.crossGroup.settings?.['switch_point'] ?? 50)
 
   // update a deep copy of the draft
@@ -262,16 +258,6 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                       <span className="block text-xs text-mute">One fade through black. The EMEET preset is clicked as soon as you press Transition in OBS, so the camera moves while the picture fades. For a slow camera, make the fade longer and the switch point later.</span>
                     </span>
                   </label>
-                  <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'seamless' ? 'border-accent bg-accent/10' : 'border-line'}`}>
-                    <input type="radio" checked={d.transitions.crossGroupMode === 'seamless'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'seamless'))} />
-                    <span>
-                      <span className="font-medium">Seamless Mode - Holding Card</span>
-                      <span className="block text-xs text-mute">
-                        Pick a scene in Preview and the app remembers it. Press Transition: fade to the holding card (a picture you choose, or plain black) → EMEET preset is clicked the
-                        moment it is reached → hold while the camera moves → fade to the remembered scene. While armed, OBS Preview shows the holding card.
-                      </span>
-                    </span>
-                  </label>
                 </div>
 
                 {d.transitions.crossGroupMode === 'fast' && (
@@ -334,70 +320,6 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                     </Button>
                     <span>Press Save to apply.</span>
                   </div>
-                )}
-
-                {d.transitions.crossGroupMode === 'seamless' && (
-                  <>
-                    <div className="mb-3">
-                      <div className="mb-1 text-xs text-mute">Holding scene name in OBS (the app creates it for you if OBS does not have it)</div>
-                      <TextInput value={d.seamless.sceneName} onChange={(v) => edit((c) => (c.seamless.sceneName = v))} />
-                    </div>
-                    <div className="mb-3 rounded-lg border border-line p-3">
-                      <div className="mb-1 flex items-center text-sm font-medium">
-                        Holding card picture
-                        <HelpTip title="Holding card">
-                          This picture is shown on screen while the camera moves (for example "Switching camera..." or your logo). It is fitted to the video with black around it. Use a
-                          16:9 PNG or JPG, such as 1920 x 1080. With no picture, the screen is plain black.
-                          <br />
-                          <br />
-                          The picture is copied into the app, so you can delete the original. It is put into the holding scene in OBS automatically.
-                        </HelpTip>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-[72px] w-[128px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-black text-[11px] text-mute">
-                          {cardPreview ? <img src={cardPreview} alt="Holding card preview" className="h-full w-full object-contain" /> : 'Plain black'}
-                        </div>
-                        <div className="flex flex-col items-start gap-2">
-                          <Button
-                            onClick={async () => {
-                              const r = await window.api.chooseHoldingCard()
-                              if (r.ok && r.cfg) edit((c) => (c.seamless.cardImage = r.cfg!.seamless.cardImage))
-                              else if (r.error) setMsg(r.error)
-                            }}
-                          >
-                            {d.seamless.cardImage ? 'Change picture ...' : 'Choose picture ...'}
-                          </Button>
-                          {d.seamless.cardImage && (
-                            <Button
-                              kind="ghost"
-                              onClick={async () => {
-                                const r = await window.api.removeHoldingCard()
-                                if (r.ok && r.cfg) edit((c) => (c.seamless.cardImage = ''))
-                              }}
-                            >
-                              Remove picture
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-2 text-xs text-mute">Applied to OBS right away. Needs OBS to be connected.</div>
-                    </div>
-                    <div className="flex flex-wrap items-end gap-3">
-                      <div>
-                        <div className="mb-1 text-xs text-mute">1. Fade to black (ms)</div>
-                        <NumInput value={d.seamless.fadeToBlackMs} onChange={(v) => edit((c) => (c.seamless.fadeToBlackMs = v))} />
-                      </div>
-                      <div>
-                        <div className="mb-1 text-xs text-mute">2. Camera clicks, then hold on black (ms)</div>
-                        <NumInput value={d.seamless.holdMs} onChange={(v) => edit((c) => (c.seamless.holdMs = v))} />
-                      </div>
-                      <div>
-                        <div className="mb-1 text-xs text-mute">3. Fade to the scene (ms)</div>
-                        <NumInput value={d.seamless.fadeInMs} onChange={(v) => edit((c) => (c.seamless.fadeInMs = v))} />
-                      </div>
-                    </div>
-                    <div className="mt-2 text-xs text-mute">Both fades use the "same preset" transition above (its name). Scene changes made by other programs skip the black and only move the camera.</div>
-                  </>
                 )}
               </Field>
 

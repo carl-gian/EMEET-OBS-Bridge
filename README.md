@@ -77,7 +77,6 @@ and prepares the next one when the transition ends.
 |---|---|
 | **Same preset group** (e.g. Close Up to Full Stage) | Plain **Fade**, 1000 ms. The camera is not touched. |
 | **Different preset group**, *Fast Mode (Fade to Black)* | **Fade to Black** (configurable duration and switch point), 1000 ms by default. The EMEET preset is clicked as soon as the transition starts (configurable delay, default 0 ms), so the camera moves while the screen dips to black. For a slow camera, a longer fade with a later switch point (for example 2800 ms and 80 %) keeps the old scene dimming until the camera has settled. |
-| **Different preset group**, *Seamless Mode (Holding Card)* | The operator picks the scene in Preview; the app swaps in a holding scene: a picture you upload in Settings, or plain black. The app creates that scene in OBS for you. On Transition: 800 ms fade to black, **camera click when that fade ends**, hold 3000 ms for the camera to arrive, then 800 ms fade in to the chosen scene. Nothing of the camera movement is seen. |
 | **Another program** switches the OBS Program scene directly (e.g. Meeting Media Manager), without using Preview | The app clicks the right preset as soon as OBS reports the new Program scene ("quick fire"). OBS reports this up to about 1 s into a 1000 ms fade; that is an OBS limit. |
 | The early guess was wrong (Preview was stale) | The app corrects it immediately with the right preset. |
 | Camera is already on that preset | Nothing happens. |
@@ -95,7 +94,7 @@ in Settings > Camera.
 ## Features
 
 **Automation**
-- Automatic transition selection (Fade within a group, Fade to Black or Seamless between groups), durations editable.
+- Automatic transition selection (Fade within a group, Fade to Black between groups), durations editable.
 - EMEET preset clicks timed against the transition, with de-duplication, correction of wrong guesses, and quick-fire for external scene changes.
 - Manual **Resync camera** (tray menu, window button, or the OBS dock) to re-press the current scene's preset.
 - Optional per-scene EMEET tracking on/off.
@@ -136,7 +135,7 @@ Open the main window and press **Settings**.
 |---|---|
 | **General** | EMEET Studio path and "open EMEET Studio when this app starts" (off by default); OBS path; open OBS at app start; start this app when Windows starts (off by default); hide in the tray at app start; log detail (Debug/Info/Warn/Error); Dry run. |
 | **OBS** | Server address, port, password (stored only on this PC), connect/request timeouts, and the name/URL to paste into OBS for the dock. |
-| **Transition Rules** | Same-preset transition; **Transition Modes** (**Fast - Fade to Black** with duration, click delay and switch point, or **Seamless - Holding Card** with an uploadable picture) and their durations; camera click delay (Fast Mode); Seamless scene name, fade-out, hold and fade-in times; behaviour switches (clear per-scene overrides on connect, prepare next transition after one ends, click the live scene's preset when connecting). |
+| **Transition Rules** | Same-preset transition; **Transition Modes** (**Fast - Fade to Black** with duration, click delay and switch point); behaviour switches (clear per-scene overrides on connect, prepare next transition after one ends, click the live scene's preset when connecting). |
 | **Camera** | Preset button positions (screen pixels), preset count, tracking buttons, EMEET window position and size, keep EMEET behind other windows, and the master "Camera automation on" switch. |
 
 Where the config file lives: `%APPDATA%\OBS Master Controller\config.json`. Logs are in the `logs` folder beside it (Open logs).

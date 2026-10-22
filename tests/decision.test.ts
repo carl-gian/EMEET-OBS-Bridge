@@ -68,7 +68,7 @@ describe('config migration', () => {
     expect(config.presets.Preset8.x).toBe(1222)
     expect(config.presets.Preset1.x).toBe(1)
   })
-  it('old 200 ms offset becomes 0 once; Black Bridge settings become Seamless; unknown options vanish', () => {
+  it('old 200 ms offset becomes 0 once; Seamless / Black Bridge settings fall back to Fast Mode; unknown options vanish', () => {
     const { config, warnings } = normalizeConfig({
       ptz: { fireOffsetMs: 200 },
       transitions: { crossGroupMode: 'blackBridge' },
@@ -77,7 +77,8 @@ describe('config migration', () => {
     })
     expect(config.ptz.fireOffsetMs).toBe(0)
     expect(warnings.some((w) => /200 ms to 0 ms/.test(w))).toBe(true)
-    expect(config.transitions.crossGroupMode).toBe('seamless')
+    expect(config.transitions.crossGroupMode).toBe('fast') // Seamless Mode was removed in 1.0.4
+    expect(warnings.some((w) => /Seamless Mode was removed/.test(w))).toBe(true)
     expect(config.seamless).toMatchObject({ sceneName: 'BLK', holdMs: 2500, fadeToBlackMs: 800, fadeInMs: 800 })
     expect((config.general as any).someRemovedOption).toBeUndefined()
     expect(normalizeConfig({ configVersion: 2, ptz: { fireOffsetMs: 200 } }).config.ptz.fireOffsetMs).toBe(200)

@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.4',
+    date: '2026-10-23',
+    items: [
+      'Seamless Mode has been taken out for now. If you were using it, the app switches you to Fast Mode. A better replacement is being built.',
+      'The Fast Mode fade (Fade to Black) is still there, with its duration and switch point settings.'
+    ]
+  },
+  {
     version: '1.0.3',
     date: '2026-10-22',
     items: [
