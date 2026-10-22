@@ -10,7 +10,7 @@ const READER = 'READER SETUP---------- (Watchtower & CBS)'
 const TABLE = 'TABLE ----------- (For Standing)'
 const BLACK = 'BLACK SCREEN'
 
-function setup(mutate?: (c: AppConfig) => void) {
+function setup(mutate?: (c: AppConfig) => void, sceneNames: string[] = [FULL, CLOSE, READER, TABLE, BLACK]) {
   const cfg = defaultConfig()
   mutate?.(cfg)
   const sent: PtzCommand[] = []
@@ -18,13 +18,24 @@ function setup(mutate?: (c: AppConfig) => void) {
   const batches: any[][] = []
   const logs: string[] = []
   let program = FULL
+  const scenesNow = [...sceneNames]
+  const flags = { failCreate: false }
+  const holdItems: string[] = [] // sources inside the Seamless holding scene (fake OBS state)
   const obs: ObsLink = {
     async call(type, data) {
       calls.push({ type, data })
       switch (type) {
         case 'GetVersion': return { obsVersion: '32', obsWebSocketVersion: '5.7.4' }
         case 'GetStudioModeEnabled': return { studioModeEnabled: true }
-        case 'GetSceneList': return { scenes: [FULL, CLOSE, READER, TABLE, BLACK].map((n, i) => ({ sceneName: n, sceneIndex: i })) }
+        case 'GetSceneList': return { scenes: scenesNow.map((n, i) => ({ sceneName: n, sceneIndex: i })) }
+        case 'GetVideoSettings': return { baseWidth: 1920, baseHeight: 1080 }
+        case 'CreateScene':
+          if (flags.failCreate) throw new Error('cannot create')
+          scenesNow.push(String(data?.sceneName))
+          return { sceneUuid: 'u' }
+        case 'CreateInput': holdItems.push(String(data?.inputName)); return { sceneItemId: holdItems.length }
+        case 'GetSceneItemList': return { sceneItems: holdItems.map((n) => ({ sourceName: n })) }
+        case 'RemoveInput': holdItems.splice(holdItems.indexOf(String(data?.inputName)), 1); return {}
         case 'GetSceneTransitionList': return { transitions: [{ transitionName: 'Fade', transitionKind: 'fade_transition' }, { transitionName: 'Fade to Black', transitionKind: 'fade_to_color_transition' }] }
         case 'GetCurrentSceneTransition': return { transitionName: 'Fade', transitionKind: 'fade_transition', transitionDuration: 1000 }
         case 'GetSceneSceneTransitionOverride': return {}
@@ -37,7 +48,7 @@ function setup(mutate?: (c: AppConfig) => void) {
   }
   const log = { debug: (m: string) => logs.push(m), info: (m: string) => logs.push(m), warn: (m: string) => logs.push(m), error: (m: string) => logs.push(m) }
   const c = new Controller({ obs, ptzSink: { send: (cmd) => sent.push(cmd) }, ptzLog: log, log, getConfig: () => cfg })
-  return { c, cfg, sent, calls, batches, logs, setProgram: (s: string) => (program = s) }
+  return { c, cfg, sent, calls, batches, logs, holdItems, flags, setProgram: (s: string) => (program = s) }
 }
 
 const flush = () => vi.advanceTimersByTimeAsync(0)
@@ -247,13 +258,64 @@ describe('Controller - Seamless Mode', () => {
     expect(t.sent.map((s) => s.presetId)).toEqual(['Preset3']) // only the quick-fire for the real scene
   })
 
-  it('falls back to Fast Mode when the black scene is missing in OBS', async () => {
+  it('falls back to Fast Mode when the black scene is missing and cannot be created', async () => {
     const t = setup((c) => {
       seamless(c)
       c.seamless.sceneName = 'NOPE'
-    })
+    }, [FULL, CLOSE, READER, TABLE])
+    t.flags.failCreate = true
     await t.c.initSession()
+    await flush()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
     expect(t.c.bridgeState).toBe('Idle')
+  })
+})
+
+describe('Controller - Seamless holding scene', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+  const seamless = (c: AppConfig) => {
+    c.transitions.crossGroupMode = 'seamless'
+  }
+  it('creates the holding scene with a black source when OBS does not have it', async () => {
+    const t = setup(seamless, [FULL, CLOSE, READER, TABLE])
+    await t.c.initSession()
+    await flush()
+    expect(t.calls.filter((c) => c.type === 'CreateScene').map((c) => c.data.sceneName)).toEqual([BLACK])
+    const black = t.calls.find((c) => c.type === 'CreateInput' && c.data.inputKind === 'color_source_v3')!
+    expect(black.data).toMatchObject({ sceneName: BLACK, inputSettings: { color: 4278190080, width: 1920, height: 1080 } })
+    expect(t.calls.some((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')).toBe(false)
+    expect(t.c.obsScenes).toContain(BLACK)
+    expect(t.logs.some((l) => /Seamless Mode ACTIVE/.test(l))).toBe(true)
+  })
+  it('adds the holding card picture scaled to the canvas, and removes it again', async () => {
+    const t = setup((c) => {
+      seamless(c)
+      c.seamless.cardImage = 'C:\\data\\holding-card.png'
+    })
+    await t.c.initSession()
+    await flush()
+    const img = t.calls.find((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')!
+    expect(img.data.inputSettings).toEqual({ file: 'C:\\data\\holding-card.png' })
+    const fit = t.calls.find((c) => c.type === 'SetSceneItemTransform')!
+    expect(fit.data.sceneItemTransform).toMatchObject({ boundsType: 'OBS_BOUNDS_SCALE_INNER', boundsWidth: 1920, boundsHeight: 1080, positionX: 960, positionY: 540 })
+    expect(t.holdItems).toContain('EMEET Bridge - holding card')
+    // a different picture later only updates the existing source
+    t.cfg.seamless.cardImage = 'C:\\data\\holding-card-2.png'
+    t.c.onConfigChanged()
+    await flush()
+    expect(t.calls.filter((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')).toHaveLength(1)
+    expect(t.calls.some((c) => c.type === 'SetInputSettings' && c.data.inputSettings.file.endsWith('holding-card-2.png'))).toBe(true)
+    // removing the picture removes our source
+    t.cfg.seamless.cardImage = ''
+    t.c.onConfigChanged()
+    await flush()
+    expect(t.calls.some((c) => c.type === 'RemoveInput' && c.data.inputName === 'EMEET Bridge - holding card')).toBe(true)
+  })
+  it('Fast Mode never touches OBS scenes', async () => {
+    const t = setup(undefined, [FULL, CLOSE, READER, TABLE])
+    await t.c.initSession()
+    await flush()
+    expect(t.calls.some((c) => c.type === 'CreateScene' || c.type === 'CreateInput')).toBe(false)
   })
 })

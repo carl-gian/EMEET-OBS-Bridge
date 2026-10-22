@@ -1,10 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } from 'electron'
 import { exec, spawn } from 'child_process'
-import { existsSync, mkdirSync } from 'fs'
-import { dirname, join } from 'path'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
+import { dirname, extname, join } from 'path'
 import { is } from './is'
 import { IPC } from '@shared/types'
-import type { AppConfig, AppState, PtzCommand } from '@shared/types'
+import type { AppConfig, AppState, HoldingCardResult, PtzCommand } from '@shared/types'
 import { Controller } from '@core/controller'
 import { normalizeSceneKey } from '@shared/scene'
 import { Logger } from './logger'
@@ -351,6 +351,56 @@ function main() {
     return after
   }
 
+  // ------------------------------------------------------------- holding card ----
+  const cardDir = join(app.getPath('userData'), 'holding-card')
+  const clearCardFiles = (except?: string) => {
+    try {
+      for (const f of readdirSync(cardDir)) if (join(cardDir, f) !== except) unlinkSync(join(cardDir, f))
+    } catch {
+      /* folder not there yet */
+    }
+  }
+  /** Lets the user pick a picture; a copy is kept in the app's data folder (so moving/deleting the original is harmless). */
+  async function chooseHoldingCard(): Promise<HoldingCardResult> {
+    const r = await dialog.showOpenDialog(win!, {
+      title: 'Choose a holding card picture',
+      properties: ['openFile'],
+      filters: [{ name: 'Pictures (PNG or JPG)', extensions: ['png', 'jpg', 'jpeg'] }]
+    })
+    if (r.canceled || !r.filePaths[0]) return { ok: false }
+    const src = r.filePaths[0]
+    try {
+      if (statSync(src).size > 25 * 1024 * 1024) return { ok: false, error: 'That picture is larger than 25 MB. Please choose a smaller one.' }
+      if (nativeImage.createFromPath(src).isEmpty()) return { ok: false, error: 'That file could not be read as a picture. Please choose a PNG or JPG.' }
+      mkdirSync(cardDir, { recursive: true })
+      const dest = join(cardDir, `holding-card-${Date.now()}${extname(src).toLowerCase()}`)
+      copyFileSync(src, dest)
+      clearCardFiles(dest)
+      const before = store.get()
+      const after = store.update((c) => (c.seamless.cardImage = dest))
+      log.info(`Holding card picture set: ${src} (copied to ${dest})`)
+      afterConfigChange(before, after)
+      return { ok: true, cfg: after }
+    } catch (e) {
+      log.error(`Holding card upload failed: ${(e as Error).message}`)
+      return { ok: false, error: (e as Error).message }
+    }
+  }
+  function removeHoldingCard(): HoldingCardResult {
+    const before = store.get()
+    const after = store.update((c) => (c.seamless.cardImage = ''))
+    clearCardFiles()
+    log.info('Holding card picture removed.')
+    afterConfigChange(before, after)
+    return { ok: true, cfg: after }
+  }
+  function holdingCardPreview(): string | null {
+    const p = store.get().seamless.cardImage
+    if (!p || !existsSync(p)) return null
+    const img = nativeImage.createFromPath(p)
+    return img.isEmpty() ? null : img.resize({ width: 320 }).toDataURL()
+  }
+
   function afterConfigChange(before: AppConfig, after: AppConfig) {
     logger.level = after.logging.level
     controller.onConfigChanged()
@@ -404,6 +454,9 @@ function main() {
   ipcMain.handle(IPC.openLogs, () => shell.openPath(logDir))
   ipcMain.handle(IPC.exportDiagnostics, () => exportDiagnostics())
   ipcMain.handle(IPC.sendDiagnostics, () => sendDiagnostics())
+  ipcMain.handle(IPC.chooseHoldingCard, () => chooseHoldingCard())
+  ipcMain.handle(IPC.removeHoldingCard, () => removeHoldingCard())
+  ipcMain.handle(IPC.holdingCardPreview, () => holdingCardPreview())
   ipcMain.handle(IPC.installUpdate, () => updater.promptInstall())
   ipcMain.handle(IPC.checkUpdate, () => updater.check(true))
   ipcMain.handle(IPC.clearLogsView, () => logger.clearView())

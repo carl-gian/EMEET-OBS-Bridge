@@ -1,5 +1,5 @@
 import type { LaunchInfo } from './changelog'
-import type { AppConfig, AppState, DiagnosticsResult, LogEntry } from './types'
+import type { AppConfig, AppState, DiagnosticsResult, HoldingCardResult, LogEntry } from './types'
 
 /** What the UI can ask the main process to do (exposed as window.api by the preload script). */
 export interface Api {
@@ -17,6 +17,9 @@ export interface Api {
   openLogs(): Promise<void>
   exportDiagnostics(): Promise<DiagnosticsResult>
   sendDiagnostics(): Promise<DiagnosticsResult>
+  chooseHoldingCard(): Promise<HoldingCardResult>
+  removeHoldingCard(): Promise<HoldingCardResult>
+  holdingCardPreview(): Promise<string | null>
   installUpdate(): Promise<void>
   checkUpdate(): Promise<void>
   browseFile(title: string, extensions: string[]): Promise<string | null>

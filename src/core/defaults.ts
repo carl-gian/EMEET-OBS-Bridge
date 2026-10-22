@@ -39,7 +39,7 @@ export function defaultConfig(): AppConfig {
         settings: { color: 4278190080, switch_point: 50 }
       }
     },
-    seamless: { sceneName: 'BLACK SCREEN', fadeToBlackMs: 800, holdMs: 3000, fadeInMs: 800 },
+    seamless: { sceneName: 'BLACK SCREEN', fadeToBlackMs: 800, holdMs: 3000, fadeInMs: 800, cardImage: '' },
     ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false },
     tracking: {
       enabled: false,

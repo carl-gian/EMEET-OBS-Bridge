@@ -64,7 +64,14 @@ export interface AppConfig {
     intraGroup: TransitionCfg
     crossGroup: TransitionCfg
   }
-  seamless: { sceneName: string; fadeToBlackMs: number; holdMs: number; fadeInMs: number }
+  seamless: {
+    sceneName: string
+    fadeToBlackMs: number
+    holdMs: number
+    fadeInMs: number
+    /** Full path of the uploaded holding-card picture (a copy kept in the app's data folder). Empty = plain black. */
+    cardImage: string
+  }
   ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean } // fireOffsetMs: 0 = click as soon as OBS reports the transition started
   tracking: {
     enabled: boolean // master switch ("Enable Tracking")
@@ -149,6 +156,12 @@ export interface AppState {
   update: UpdateInfo
 }
 
+export interface HoldingCardResult {
+  ok: boolean
+  cfg?: AppConfig
+  error?: string
+}
+
 export interface DiagnosticsResult {
   ok: boolean
   path?: string
@@ -180,6 +193,9 @@ export const IPC = {
   getLaunchInfo: 'app:launch-info',
   ackLaunchInfo: 'app:launch-ack',
   openHelp: 'ui:open-help',
+  chooseHoldingCard: 'card:choose',
+  removeHoldingCard: 'card:remove',
+  holdingCardPreview: 'card:preview',
   installUpdate: 'update:install',
   checkUpdate: 'update:check'
 } as const

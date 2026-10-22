@@ -15,6 +15,10 @@ interface Resolved {
  * (Fast Mode, quick-fire, manual resync, priming) plus Seamless Mode (fade to a black scene, move the camera, hold, fade to the target).
  * It never touches Electron, the network or Win32 directly - everything goes through `Deps`.
  */
+/** Names of the two sources the app keeps inside the Seamless holding scene. */
+const HOLD_BLACK = 'EMEET Bridge - black'
+const HOLD_CARD = 'EMEET Bridge - holding card'
+
 export class Controller {
   readonly ptz: PtzDispatcher
 
@@ -232,14 +236,103 @@ export class Controller {
 
   private bridgeSetup() {
     const want = this.cfg.transitions.crossGroupMode === 'seamless'
+    if (want && !this._dryRun) {
+      void this.syncHoldingScene()
+      // If the scene is missing it is created first; the sync re-checks afterwards. Otherwise check right away.
+      if (!this.findBridgeScene()) return
+    }
+    this.evaluateBridge()
+  }
+
+  private findBridgeScene() {
     const bn = this.cfg.seamless.sceneName
-    this.bridgeSceneName = this.obsScenes.find((s) => normalizeSceneKey(s) === normalizeSceneKey(bn)) ?? null
+    return this.obsScenes.find((s) => normalizeSceneKey(s) === normalizeSceneKey(bn)) ?? null
+  }
+
+  private evaluateBridge() {
+    const want = this.cfg.transitions.crossGroupMode === 'seamless'
+    const bn = this.cfg.seamless.sceneName
+    this.bridgeSceneName = this.findBridgeScene()
     this.bridgeActive = want && !!this.bridgeSceneName
     if (want && !this.bridgeActive)
-      this.d.log.error(`Seamless Mode is selected but OBS has no scene named '${bn}' - create it (a scene with a black Color Source). Falling back to Fast Mode.`)
-    else if (this.bridgeActive) this.d.log.info(`Seamless Mode ACTIVE via '${this.bridgeSceneName}'  (fade to black ${this.cfg.seamless.fadeToBlackMs} ms, hold ${this.cfg.seamless.holdMs} ms, fade in ${this.cfg.seamless.fadeInMs} ms).`)
+      this.d.log.error(`Seamless Mode is selected but OBS has no scene named '${bn}' and it could not be created. Falling back to Fast Mode.`)
+    else if (this.bridgeActive) this.d.log.info(`Seamless Mode ACTIVE via '${this.bridgeSceneName}'  (fade to black ${this.cfg.seamless.fadeToBlackMs} ms, hold ${this.cfg.seamless.holdMs} ms, fade in ${this.cfg.seamless.fadeInMs} ms${this.cfg.seamless.cardImage ? ', holding card picture' : ', plain black'}).`)
     else this.d.log.info('Cross-group mode: Fast Mode (camera click ' + (this.cfg.ptz.fireOffsetMs > 0 ? this.cfg.ptz.fireOffsetMs + ' ms after the transition starts' : 'immediately when the transition starts') + ').')
     if (!this.bridgeActive) this.resetBridge('bridge not active')
+  }
+
+  /**
+   * Makes sure the Seamless "holding" scene exists in OBS: a black Color Source, plus the uploaded holding-card picture
+   * (scaled to fit the canvas) when there is one. Creates the scene if it is missing, so nobody has to build it by hand.
+   * Safe to run repeatedly; never touches anything the owner put in a scene they made themselves except our own two sources.
+   */
+  private holdingSyncing = false
+  private holdingAgain = false
+  private async syncHoldingScene() {
+    if (this.holdingSyncing) {
+      this.holdingAgain = true
+      return
+    }
+    this.holdingSyncing = true
+    try {
+      const log = this.d.log
+      const sceneName = this.findBridgeScene() ?? this.cfg.seamless.sceneName
+      if (!sceneName) return
+      const vs = await this.safeCall('GetVideoSettings')
+      const w = Number(vs?.baseWidth) || 1920
+      const h = Number(vs?.baseHeight) || 1080
+      if (!this.findBridgeScene()) {
+        const r = await this.safeCall('CreateScene', { sceneName })
+        if (!r) {
+          log.error(`Could not create the holding scene '${sceneName}' in OBS.`)
+          return
+        }
+        log.info(`Created the holding scene '${sceneName}' in OBS (black background).`)
+        await this.addSource(sceneName, HOLD_BLACK, 'color_source_v3', { color: 4278190080, width: w, height: h })
+      }
+      const file = this.cfg.seamless.cardImage
+      const items: { sourceName: string }[] = (await this.safeCall('GetSceneItemList', { sceneName }))?.sceneItems ?? []
+      const hasCard = items.some((i) => i.sourceName === HOLD_CARD)
+      if (file && hasCard) {
+        await this.safeCall('SetInputSettings', { inputName: HOLD_CARD, inputSettings: { file }, overlay: true })
+        log.info(`Holding card picture updated in '${sceneName}'.`)
+      } else if (file) {
+        const id = await this.addSource(sceneName, HOLD_CARD, 'image_source', { file })
+        if (id !== null) {
+          await this.safeCall('SetSceneItemTransform', {
+            sceneName,
+            sceneItemId: id,
+            sceneItemTransform: { positionX: w / 2, positionY: h / 2, alignment: 0, boundsType: 'OBS_BOUNDS_SCALE_INNER', boundsAlignment: 0, boundsWidth: w, boundsHeight: h }
+          })
+          log.info(`Holding card picture added to '${sceneName}'.`)
+        }
+      } else if (hasCard) {
+        await this.safeCall('RemoveInput', { inputName: HOLD_CARD })
+        log.info(`Holding card picture removed from '${sceneName}' (back to plain black).`)
+      }
+    } catch (e) {
+      this.d.log.warn(`Holding scene sync failed: ${(e as Error).message}`)
+    } finally {
+      this.holdingSyncing = false
+      await this.refreshSceneList()
+      this.evaluateBridge()
+      if (this.holdingAgain) {
+        this.holdingAgain = false
+        void this.syncHoldingScene()
+      }
+    }
+  }
+
+  /** Creates an OBS input inside a scene, or re-uses the input if one with that name already exists. Returns the scene item id. */
+  private async addSource(sceneName: string, inputName: string, inputKind: string, inputSettings: Record<string, unknown>): Promise<number | null> {
+    const made = await this.safeCall('CreateInput', { sceneName, inputName, inputKind, inputSettings, sceneItemEnabled: true })
+    if (made) return Number(made.sceneItemId)
+    const reuse = await this.safeCall('CreateSceneItem', { sceneName, sourceName: inputName, sceneItemEnabled: true })
+    if (reuse) {
+      if (inputKind === 'image_source') await this.safeCall('SetInputSettings', { inputName, inputSettings, overlay: true })
+      return Number(reuse.sceneItemId)
+    }
+    return null
   }
 
   // ------------------------------------------------------------------ priming ----

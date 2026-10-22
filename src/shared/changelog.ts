@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.3',
+    date: '2026-10-22',
+    items: [
+      'Seamless Mode can show a holding card: choose a picture in Settings > Transition Rules and it is shown while the camera moves. With no picture the screen is plain black.',
+      'The app now creates the holding scene in OBS for you, so you no longer have to build a "BLACK SCREEN" scene by hand.',
+      'Fast Mode (Fade to Black) has a new Switch point setting and a "slow camera" button, so the fade can last long enough for a slow camera to finish moving.',
+      'The different-preset options in Settings are now called Transition Modes.'
+    ]
+  },
+  {
     version: '1.0.2',
     date: '2026-10-22',
     items: [
