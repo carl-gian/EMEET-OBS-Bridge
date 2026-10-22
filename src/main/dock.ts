@@ -84,6 +84,7 @@ function handle(d: DockDeps, req: IncomingMessage, res: ServerResponse) {
       obs: s.obs,
       camera: { driver: s.camera.driver },
       dryRun: s.dryRun,
+      update: s.update,
       preview: s.preview,
       previewIsLive: !!s.preview && key === normalizeSceneKey(s.program),
       previewPreset: lookup(cfg.scenes) ?? null,
@@ -137,6 +138,7 @@ const DOCK_HTML = `<!doctype html>
   .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:#2a2f38;color:var(--dim)}
   .badge i{width:8px;height:8px;border-radius:50%;background:currentColor}
   .badge.ok{background:rgba(63,185,80,.15);color:var(--ok)}
+  .badge.accent{background:rgba(59,130,246,.2);color:#9cc0ff}
   .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
   .badge.bad{background:rgba(248,81,73,.16);color:var(--bad)}
   .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}
@@ -160,6 +162,7 @@ const DOCK_HTML = `<!doctype html>
   <div class="badges">
     <span class="badge" id="obsB"><i></i><span id="obs">OBS ...</span></span>
     <span class="badge" id="camB"><i></i><span id="cam">EMEET ...</span></span>
+    <span class="badge accent" id="upd" hidden><i></i><span id="updT"></span></span>
     <span class="badge warn" id="dry" hidden><i></i>Dry run</span>
   </div>
   <div class="note err" id="sm" role="alert" hidden><b>OBS Studio Mode is off.</b> Turn it on in OBS (the Studio Mode button in the Controls panel). This app needs it to work smoothly.</div>
@@ -207,6 +210,9 @@ const DOCK_HTML = `<!doctype html>
       badge('cam', d === 'ready' ? 'ok' : d === 'mock' ? '' : d === 'starting' ? 'warn' : 'bad',
         d === 'ready' ? 'EMEET detected' : d === 'mock' ? 'EMEET not checked' : d === 'starting' ? 'EMEET looking...' : 'EMEET not detected')
       $('dry').hidden = !s.dryRun
+      const u = s.update || {}
+      $('upd').hidden = !(u.status === 'ready' || u.status === 'downloading')
+      $('updT').textContent = u.status === 'ready' ? 'Update ' + u.version + ' ready (open the app)' : 'Downloading update ' + u.percent + '%'
       const smOff = o === 'connected' && !s.obs.studioMode
       $('sm').hidden = !smOff
       $('card').hidden = smOff

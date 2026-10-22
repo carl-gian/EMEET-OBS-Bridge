@@ -115,6 +115,21 @@ export default function App() {
           {obsText}
         </Pill>
         <Pill tone={drvTone}>{drvText}</Pill>
+        {state.update.status === 'ready' && (
+          <button
+            onClick={() => void window.api.installUpdate()}
+            title="A new version is downloaded. Click to restart and update (do not do this during a live meeting)."
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-white shadow ring-2 ring-accent/40 hover:brightness-110"
+          >
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            Update {state.update.version} ready - restart to install
+          </button>
+        )}
+        {state.update.status === 'downloading' && (
+          <Pill tone="warn">
+            Downloading update {state.update.version} ... {state.update.percent}%
+          </Pill>
+        )}
         {state.bridgeState !== 'Idle' && (
           <div className="text-xs text-warn">Seamless: {SEAMLESS_LABEL[state.bridgeState] ?? state.bridgeState}</div>
         )}
@@ -180,7 +195,7 @@ export default function App() {
       </main>
 
       {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-line bg-panel2 px-4 py-2 text-sm shadow-lg">{toast}</div>}
-      {helpTopic && <HelpGuide key={helpTopic} initial={helpTopic} since={launch?.kind === 'updated' ? launch.from : null} onClose={closeHelp} />}
+      {helpTopic && <HelpGuide key={helpTopic} initial={helpTopic} entries={launch?.kind === 'updated' ? launch.entries : undefined} onClose={closeHelp} />}
       {settingsOpen && <SettingsModal onHelp={openHelp} cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
     </div>
   )

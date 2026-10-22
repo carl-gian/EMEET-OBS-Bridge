@@ -17,6 +17,8 @@ export interface Api {
   openLogs(): Promise<void>
   exportDiagnostics(): Promise<DiagnosticsResult>
   sendDiagnostics(): Promise<DiagnosticsResult>
+  installUpdate(): Promise<void>
+  checkUpdate(): Promise<void>
   browseFile(title: string, extensions: string[]): Promise<string | null>
   clearLogView(): Promise<void>
   getLaunchInfo(): Promise<LaunchInfo>

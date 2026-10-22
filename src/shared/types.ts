@@ -118,6 +118,13 @@ export interface PtzCommand {
 export type ObsStatus = 'disconnected' | 'connecting' | 'connected'
 export type DriverStatus = 'mock' | 'stopped' | 'starting' | 'ready' | 'error'
 
+export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'up-to-date' | 'error' | 'disabled'
+export interface UpdateInfo {
+  status: UpdateStatus
+  version: string // the new version, once one has been found
+  percent: number // download progress 0-100
+}
+
 export interface AppState {
   version: string
   platform: string
@@ -139,6 +146,7 @@ export interface AppState {
   }
   dryRun: boolean
   bridgeState: string
+  update: UpdateInfo
 }
 
 export interface DiagnosticsResult {
@@ -171,5 +179,7 @@ export const IPC = {
   clearLogsView: 'log:clear',
   getLaunchInfo: 'app:launch-info',
   ackLaunchInfo: 'app:launch-ack',
-  openHelp: 'ui:open-help'
+  openHelp: 'ui:open-help',
+  installUpdate: 'update:install',
+  checkUpdate: 'update:check'
 } as const

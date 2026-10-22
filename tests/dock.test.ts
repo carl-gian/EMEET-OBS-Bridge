@@ -10,7 +10,8 @@ const state: any = {
   obs: { status: 'connected', studioMode: true },
   program: 'Table',
   preview: 'Podium ---- (talks)',
-  camera: { group: 'Preset1', driver: 'ready' }
+  camera: { group: 'Preset1', driver: 'ready' },
+  update: { status: 'ready', version: '1.0.2', percent: 100 }
 }
 const cfg: any = {
   presetCount: 3,
@@ -40,6 +41,7 @@ describe('OBS dock server', () => {
     expect(s.previewIsLive).toBe(false)
     expect(s.presets.map((p: any) => p.id)).toEqual(['Preset1', 'Preset2', 'Preset3'])
     expect(s.camera.driver).toBe('ready')
+    expect(s.update).toEqual({ status: 'ready', version: '1.0.2', percent: 100 })
   })
   it('rejects POST without the dock header, accepts it with', async () => {
     expect((await fetch(`${base}/api/resync`, { method: 'POST' })).status).toBe(403)

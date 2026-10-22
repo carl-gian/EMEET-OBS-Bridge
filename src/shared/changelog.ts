@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.2',
+    date: '2026-10-22',
+    items: [
+      'Updates are now much easier to notice: a blue "Update ready" badge appears at the top of the app (and in the OBS dock) and Windows shows a notification. Click either to restart and update.',
+      'Check for updates in the tray menu now tells you when a new version is found and downloading.'
+    ]
+  },
+  {
     version: '1.0.1',
     date: '2026-10-22',
     items: [

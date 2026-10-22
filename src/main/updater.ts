@@ -1,8 +1,7 @@
 import { app, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import type { Log } from '@core/types'
-
-export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'up-to-date' | 'error' | 'disabled'
+import type { UpdateInfo, UpdateStatus } from '@shared/types'
 
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000
 const FIRST_CHECK_DELAY_MS = 30 * 1000
@@ -16,7 +15,10 @@ const FIRST_CHECK_DELAY_MS = 30 * 1000
 export class Updater {
   status: UpdateStatus = app.isPackaged ? 'idle' : 'disabled'
   availableVersion = ''
+  percent = 0
   onChange: () => void = () => {}
+  /** Called once when a new version has finished downloading (the app shows a notification). */
+  onReady: (version: string) => void = () => {}
   private timer: ReturnType<typeof setInterval> | null = null
   private manual = false
 
@@ -24,6 +26,12 @@ export class Updater {
 
   start() {
     if (!app.isPackaged) {
+      // OMC_DEMO_UPDATE=1 (developer screenshots only): pretend an update is ready so the badge can be seen.
+      if (process.env['OMC_DEMO_UPDATE']) {
+        this.availableVersion = '1.0.2'
+        this.percent = 100
+        this.status = 'ready'
+      }
       this.log.info('Auto-update disabled (development run).')
       return
     }
@@ -38,8 +46,20 @@ export class Updater {
     autoUpdater.on('checking-for-update', () => this.set('checking'))
     autoUpdater.on('update-available', (i) => {
       this.availableVersion = i.version
+      this.percent = 0
       this.log.info(`Update ${i.version} found - downloading in the background.`)
       this.set('downloading')
+      if (this.manual) {
+        void dialog.showMessageBox({ type: 'info', message: `Version ${i.version} is available.`, detail: 'It is downloading in the background. You will get a notification when it is ready to install.', buttons: ['OK'] })
+        this.manual = false
+      }
+    })
+    autoUpdater.on('download-progress', (p) => {
+      const pct = Math.round(p.percent)
+      if (pct !== this.percent) {
+        this.percent = pct
+        this.onChange()
+      }
     })
     autoUpdater.on('update-not-available', () => {
       this.set('up-to-date')
@@ -48,8 +68,10 @@ export class Updater {
     })
     autoUpdater.on('update-downloaded', (i) => {
       this.availableVersion = i.version
-      this.log.info(`Update ${i.version} downloaded. Waiting for the operator to restart (tray menu) - or it installs on next quit.`)
+      this.log.info(`Update ${i.version} downloaded. Waiting for the operator to restart (badge / tray menu) - or it installs on next quit.`)
+      this.percent = 100
       this.set('ready')
+      this.onReady(i.version)
     })
     autoUpdater.on('error', (e) => {
       this.log.error(`Update check failed: ${e?.message ?? e}`)
@@ -89,6 +111,10 @@ export class Updater {
       this.log.info('Operator chose to install the update now.')
       autoUpdater.quitAndInstall(false, true)
     }
+  }
+
+  get info(): UpdateInfo {
+    return { status: this.status, version: this.availableVersion, percent: this.percent }
   }
 
   stop() {

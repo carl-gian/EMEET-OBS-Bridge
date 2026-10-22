@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } from 'electron'
 import { exec, spawn } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
 import { dirname, join } from 'path'
@@ -147,7 +147,8 @@ function main() {
       scenes: controller.obsScenes,
       camera: { group: controller.ptz.cameraGroup, tracking: controller.ptz.tracking, driver: driver.status, hwnd: driver.hwnd },
       dryRun: controller.dryRun,
-      bridgeState: controller.bridgeState
+      bridgeState: controller.bridgeState,
+      update: updater.info
     }
   }
   function schedulePush() {
@@ -161,7 +162,24 @@ function main() {
   logger.onEntry = (e) => win?.webContents.send(IPC.logPush, e)
 
   const updater = new Updater(log)
-  updater.onChange = () => updateTray()
+  updater.onChange = () => {
+    updateTray()
+    schedulePush()
+  }
+  // A Windows notification when an update is ready; clicking it opens the "restart and update" question.
+  updater.onReady = (v) => {
+    if (!Notification.isSupported()) return
+    const n = new Notification({
+      title: 'Update ready',
+      body: `EMEET–OBS Bridge ${v} is ready to install. Click here to restart and update.`,
+      icon: existsSync(iconPath()) ? iconPath() : undefined
+    })
+    n.on('click', () => {
+      showWindow()
+      void updater.promptInstall()
+    })
+    n.show()
+  }
   // First run, or first run after an update with release notes: show the window even if "start hidden" is on.
   const launch = launchInfo(readLastSeenVersion(), version)
   log.info(`Launch: ${launch.kind}${launch.from ? ` (previously ${launch.from})` : ''}`)
@@ -386,6 +404,8 @@ function main() {
   ipcMain.handle(IPC.openLogs, () => shell.openPath(logDir))
   ipcMain.handle(IPC.exportDiagnostics, () => exportDiagnostics())
   ipcMain.handle(IPC.sendDiagnostics, () => sendDiagnostics())
+  ipcMain.handle(IPC.installUpdate, () => updater.promptInstall())
+  ipcMain.handle(IPC.checkUpdate, () => updater.check(true))
   ipcMain.handle(IPC.clearLogsView, () => logger.clearView())
   ipcMain.handle(IPC.getLaunchInfo, () => launch)
   ipcMain.handle(IPC.ackLaunchInfo, () => writeLastSeenVersion(version))

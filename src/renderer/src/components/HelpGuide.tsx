@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { CHANGELOG, compareVersions } from '@shared/changelog'
+import { CHANGELOG, type ChangelogEntry } from '@shared/changelog'
 import { Button } from './ui'
 
 type Topic = { id: string; title: string; body: ReactNode }
@@ -95,15 +95,15 @@ function DemoAddPreset() {
 const P = ({ children }: { children: ReactNode }) => <p className="mb-3 text-[13px] leading-relaxed">{children}</p>
 const H = ({ children }: { children: ReactNode }) => <h3 className="mb-2 mt-4 text-[13px] font-semibold">{children}</h3>
 
-function WhatsNew({ since }: { since: string | null }) {
+/** Only the notes the operator has not seen: after an update, every version since the one they last ran; otherwise just the latest. */
+function WhatsNew({ entries }: { entries: ChangelogEntry[] }) {
   return (
     <>
-      {CHANGELOG.map((e) => (
+      {entries.map((e) => (
         <div key={e.version} className="mb-4">
           <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold">
             Version {e.version}
             <span className="text-[11px] font-normal text-mute">{e.date}</span>
-            {since && compareVersions(e.version, since) > 0 && <span className="rounded-full bg-ok/20 px-2 py-0.5 text-[10px] font-semibold text-ok">NEW</span>}
           </div>
           <ul className="list-disc space-y-1 pl-5 text-[13px]">
             {e.items.map((t, i) => (
@@ -116,8 +116,8 @@ function WhatsNew({ since }: { since: string | null }) {
   )
 }
 
-const TOPICS = (since: string | null): Topic[] => [
-  { id: 'whatsnew', title: "What's new", body: <WhatsNew since={since} /> },
+const TOPICS = (entries: ChangelogEntry[]): Topic[] => [
+  { id: 'whatsnew', title: "What's new", body: <WhatsNew entries={entries} /> },
   {
     id: 'start',
     title: 'Start here',
@@ -217,14 +217,14 @@ const TOPICS = (since: string | null): Topic[] => [
   }
 ]
 
-export default function HelpGuide({ onClose, initial = 'start', since = null }: { onClose: () => void; initial?: string; since?: string | null }) {
+export default function HelpGuide({ onClose, initial = 'start', entries }: { onClose: () => void; initial?: string; entries?: ChangelogEntry[] }) {
   const [id, setId] = useState(initial)
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', esc)
     return () => document.removeEventListener('keydown', esc)
   }, [onClose])
-  const topics = TOPICS(since)
+  const topics = TOPICS(entries?.length ? entries : CHANGELOG.slice(0, 1))
   const topic = topics.find((t) => t.id === id) ?? topics[0]
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
