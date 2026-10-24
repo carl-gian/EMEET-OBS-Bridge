@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } from 'electron'
 import { exec, spawn } from 'child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { dirname, extname, join } from 'path'
@@ -6,6 +6,7 @@ import { is } from './is'
 import { IPC } from '@shared/types'
 import type { AppConfig, AppState, HoldingCardResult, PtzCommand } from '@shared/types'
 import { Controller } from '@core/controller'
+import { checkPrimaryDisplay, displayErrorText } from '@core/display'
 import { normalizeSceneKey } from '@shared/scene'
 import { Logger } from './logger'
 import { ConfigStore } from './configStore'
@@ -91,6 +92,28 @@ function main() {
   const version = app.getVersion()
   log.info(`BUILD ${version} (electron ${process.versions.electron}, node ${process.versions.node}, ${process.platform} ${process.arch}, ${app.isPackaged ? 'installed' : 'dev'})`)
   log.info(`Log folder: ${logDir}`)
+
+  // ---- primary display must be exactly 1080p, otherwise the camera click positions are wrong: stop everything ----
+  const display0 = screen.getPrimaryDisplay()
+  const dcheck = checkPrimaryDisplay(display0.size, display0.scaleFactor)
+  log.info(`Primary display: ${dcheck.width}x${dcheck.height} physical (scale ${display0.scaleFactor})`)
+  if (!dcheck.ok) {
+    log.error(`Primary display is ${dcheck.width}x${dcheck.height}, not 1920x1080 - stopping the program.`)
+    const t = displayErrorText(dcheck)
+    dialog.showMessageBoxSync({ type: 'error', title: t.title, message: t.message, detail: t.detail, buttons: ['Close'], noLink: true })
+    app.exit(1)
+    return
+  }
+  // If the main display's resolution is changed while running, stop as well.
+  screen.on('display-metrics-changed', () => {
+    const d = screen.getPrimaryDisplay()
+    const c = checkPrimaryDisplay(d.size, d.scaleFactor)
+    if (c.ok) return
+    log.error(`Primary display changed to ${c.width}x${c.height}, not 1920x1080 - stopping the program.`)
+    const t = displayErrorText(c)
+    dialog.showMessageBoxSync({ type: 'error', title: t.title, message: t.message, detail: t.detail, buttons: ['Close'], noLink: true })
+    app.exit(1)
+  })
 
   process.on('uncaughtException', (e) => log.error(`Uncaught exception: ${e.stack ?? e}`))
   process.on('unhandledRejection', (e) => log.error(`Unhandled rejection: ${(e as Error)?.stack ?? e}`))

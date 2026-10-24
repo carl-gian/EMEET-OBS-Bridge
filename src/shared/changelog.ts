@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.5',
+    date: '2026-10-25',
+    items: [
+      'The app now checks that your main display is exactly 1920 x 1080 (1080p). The camera buttons are clicked at fixed screen positions, so any other resolution would click the wrong spots.',
+      'If the main display is not 1080p, the app shows an error saying it has stopped working and closes. Set the main display to 1920 x 1080 in Windows and start it again.',
+      'Only the main display is checked. A second display does not matter. Windows scaling (such as 125%) is fine as long as the real resolution is 1920 x 1080.'
+    ]
+  },
+  {
     version: '1.0.4',
     date: '2026-10-23',
     items: [
