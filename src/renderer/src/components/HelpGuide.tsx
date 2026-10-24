@@ -129,7 +129,7 @@ const TOPICS = (entries: ChangelogEntry[]): Topic[] => [
           <li>OBS is open, <b>Studio Mode is on</b>, and the header says "Connected".</li>
           <li>EMEET Studio is open and the header says the camera helper is ready.</li>
           <li>Every scene has a EMEET preset chosen in the Scene Manager.</li>
-          <li>The screen is <b>1920 x 1080</b> (other resolutions are not supported yet).</li>
+          <li>The main display is <b>1920 x 1080</b>. On any other resolution the app shows an error and closes.</li>
         </ul>
         <P>Use the topics on the left. The two animated guides show how to give a scene a preset and how to add more presets.</P>
       </>

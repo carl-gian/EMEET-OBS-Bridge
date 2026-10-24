@@ -5,6 +5,7 @@ import SceneManager from './components/SceneManager'
 import ConsoleLog from './components/ConsoleLog'
 import SettingsModal from './components/SettingsModal'
 import HelpGuide from './components/HelpGuide'
+import Tutorial from './components/Tutorial'
 import { Button, HelpTip, Pill } from './components/ui'
 
 const SEAMLESS_LABEL: Record<string, string> = {
@@ -30,6 +31,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [consoleOpen, setConsoleOpen] = useState(false) // hidden at every start
   const [helpTopic, setHelpTopic] = useState<string | null>(null)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
   const [launch, setLaunch] = useState<LaunchInfo | null>(null)
   const openHelp = (topic = 'start') => setHelpTopic(topic)
   const closeHelp = () => {
@@ -115,6 +117,13 @@ export default function App() {
           {obsText}
         </Pill>
         <Pill tone={drvTone}>{drvText}</Pill>
+        <button
+          onClick={() => setTutorialOpen(true)}
+          title="A short step-by-step guide to using the OBS dock with this app"
+          className="inline-flex items-center gap-1.5 rounded-full border border-accent/60 bg-accent/15 px-3 py-1 text-xs font-semibold text-accent hover:bg-accent/25"
+        >
+          ▶ OBS tutorial for JW AV operators
+        </button>
         {state.update.status === 'ready' && (
           <button
             onClick={() => void window.api.installUpdate()}
@@ -196,6 +205,7 @@ export default function App() {
 
       {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-line bg-panel2 px-4 py-2 text-sm shadow-lg">{toast}</div>}
       {helpTopic && <HelpGuide key={helpTopic} initial={helpTopic} entries={launch?.kind === 'updated' ? launch.entries : undefined} onClose={closeHelp} />}
+      {tutorialOpen && <Tutorial onClose={() => setTutorialOpen(false)} />}
       {settingsOpen && <SettingsModal onHelp={openHelp} cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
     </div>
   )

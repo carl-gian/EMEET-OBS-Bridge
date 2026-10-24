@@ -143,3 +143,31 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .hg-run { animation: none !important; opacity: 1 !important; }
 }
+
+/* ---------------------------------------------------------------- OBS tutorial mock ---- */
+.tut-obs { border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-bg); font-size: 11px; overflow: hidden; user-select: none; }
+.tut-obs * { box-sizing: border-box; }
+.tut-bar { display: flex; gap: 14px; padding: 5px 10px; border-bottom: 1px solid var(--color-line); color: var(--color-mute); }
+.tut-body { display: flex; gap: 8px; padding: 8px; }
+.tut-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.tut-screens { display: flex; align-items: center; gap: 8px; }
+.tut-screen { flex: 1; }
+.tut-pic { height: 78px; border-radius: 4px; background: linear-gradient(135deg, #2b3a55, #1a2233); transition: background 0.6s; }
+.tut-pic-b { background: linear-gradient(135deg, #55402b, #33281a); }
+.tut-cap { color: var(--color-mute); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+.tut-trans, .tut-btn, .tut-select { border: 1px solid var(--color-line); border-radius: 5px; background: var(--color-panel2); padding: 5px 8px; text-align: center; }
+.tut-bottom { display: flex; gap: 8px; }
+.tut-scenes { flex: 1; border: 1px solid var(--color-line); border-radius: 6px; padding: 6px; }
+.tut-studio { width: 110px; border: 1px solid var(--color-line); border-radius: 6px; padding: 6px; }
+.tut-row { padding: 3px 6px; border-radius: 3px; }
+.tut-sel { background: rgba(79, 140, 255, 0.35); }
+.tut-dock { position: relative; width: 190px; border: 1px solid var(--color-line); border-radius: 6px; padding: 8px; background: var(--color-panel); }
+.tut-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.tut-ok { border-radius: 999px; padding: 1px 7px; background: rgba(62, 207, 142, 0.15); color: var(--color-ok); font-size: 10px; }
+.tut-scene { font-weight: 600; margin-bottom: 6px; }
+.tut-select { text-align: left; }
+.tut-drop { position: absolute; left: 8px; right: 8px; top: 106px; z-index: 5; border: 1px solid var(--color-line); border-radius: 5px; background: var(--color-panel2); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); }
+.tut-drop > div { padding: 4px 8px; }
+.tut-pulse { animation: tut-pulse 1.4s ease-in-out infinite; }
+@keyframes tut-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.9); } 50% { box-shadow: 0 0 0 4px rgba(79, 140, 255, 0.25); } }
+@media (prefers-reduced-motion: reduce) { .tut-pulse { animation: none; box-shadow: 0 0 0 2px var(--color-accent); } }

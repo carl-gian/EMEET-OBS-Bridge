@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.0.6',
+    date: '2026-10-25',
+    items: [
+      'New "OBS tutorial for JW AV operators" button at the top of the main screen. It walks you through adding the dock to OBS, picking a scene, choosing its camera preset and pressing Transition, one short step at a time.'
+    ]
+  },
+  {
     version: '1.0.5',
     date: '2026-10-25',
     items: [
