@@ -12,6 +12,7 @@ const BLACK = 'BLACK SCREEN'
 
 function setup(mutate?: (c: AppConfig) => void) {
   const cfg = defaultConfig()
+  cfg.emeet.presetClickCount = 1 // most tests look at a single press; the repeat has its own test below
   mutate?.(cfg)
   const sent: PtzCommand[] = []
   const calls: { type: string; data?: any }[] = []
@@ -287,5 +288,25 @@ describe('Transition settings are applied after OBS has switched (606 race)', ()
     await vi.advanceTimersByTimeAsync(2000)
     expect(attempts).toBe(3)
     expect(t.logs.some((l) => /Transition settings applied/.test(l))).toBe(true)
+  })
+})
+
+describe('Preset button is pressed several times', () => {
+  it('presses each preset 3 times, 300 ms apart, by default; tracking follows the last press', async () => {
+    const t = setup((c) => {
+      c.emeet.presetClickCount = 3
+      c.emeet.presetClickGapMs = 300
+      c.tracking.enableClick = { x: 10, y: 20 }
+      c.sceneTracking = { [READER]: true }
+    })
+    await t.c.initSession()
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
+    const clicks = t.sent[0].clicks
+    expect(clicks.map((k) => [k.x, k.y, k.delayMs ?? 0])).toEqual([[1025, 764, 0], [1025, 764, 300], [1025, 764, 300], [10, 20, 500]])
+    expect(clicks[1].note).toBe('preset Preset2 (press 2/3)')
+  })
+  it('the shipped default is 3 presses, 300 ms', () => {
+    const d = defaultConfig()
+    expect([d.emeet.presetClickCount, d.emeet.presetClickGapMs]).toEqual([3, 300])
   })
 })

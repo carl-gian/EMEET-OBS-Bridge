@@ -71,7 +71,19 @@ export class PtzDispatcher {
         if (pc.length === 0) {
           this.log.warn(`Preset '${groupId}' (${label}) has no x/y in settings - camera NOT moved.`)
         } else {
-          pc.forEach((c, i) => clicks.push({ ...c, note: i === 0 ? `preset ${groupId}` : `preset ${groupId} #${i + 1}` }))
+          // Press the preset button several times (the EMEET app sometimes ignores one press): the whole preset sequence is
+          // repeated presetClickCount times, with presetClickGapMs before each repeat. Tracking is clicked after the last one.
+          const times = Math.max(1, cfg.emeet.presetClickCount ?? 1)
+          const gap = cfg.emeet.presetClickGapMs ?? 300
+          for (let r = 0; r < times; r++) {
+            pc.forEach((c, i) =>
+              clicks.push({
+                ...c,
+                ...(r > 0 && i === 0 ? { delayMs: gap } : {}),
+                note: `preset ${groupId}${i > 0 ? ` #${i + 1}` : ''}${r > 0 ? ` (press ${r + 1}/${times})` : times > 1 ? ` (press 1/${times})` : ''}`
+              })
+            )
+          }
           presetSent = true
         }
       }

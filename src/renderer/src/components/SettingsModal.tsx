@@ -542,6 +542,19 @@ export default function SettingsModal({
                     <NumInput value={d.emeet.clickHoldMs} onChange={(v) => edit((c) => (c.emeet.clickHoldMs = v))} />
                   </div>
                   <div>
+                    <div className="mb-1 flex items-center text-xs text-mute">
+                      Presses per preset
+                      <HelpTip title="Presses per preset">
+                        Each EMEET preset button is pressed this many times (1 to 5), a moment apart, to be sure the camera reacts. Pressing a preset again does no harm. Default: 3.
+                      </HelpTip>
+                    </div>
+                    <NumInput value={d.emeet.presetClickCount} onChange={(v) => edit((c) => (c.emeet.presetClickCount = Math.max(1, Math.min(5, Math.round(v)))))} />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-mute">Gap between presses (ms)</div>
+                    <NumInput value={d.emeet.presetClickGapMs} onChange={(v) => edit((c) => (c.emeet.presetClickGapMs = Math.max(100, Math.min(2000, Math.round(v)))))} />
+                  </div>
+                  <div>
                     <div className="mb-1 text-xs text-mute">Pause between clicks (ms)</div>
                     <NumInput value={d.emeet.clickDelayMs} onChange={(v) => edit((c) => (c.emeet.clickDelayMs = v))} />
                   </div>

@@ -13,7 +13,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: '2026-10-28',
     items: [
       'Fixed: the Seamless picture and the fade and hold times set in the app were not reaching the OBS plugin (OBS answered "does not support custom settings" because the settings arrived before OBS had switched transitions). They are now applied after the switch, with retries.',
-      'The same fix makes the Fast Mode switch point setting take effect.'
+      'The same fix makes the Fast Mode switch point setting take effect.',
+      'Each EMEET preset button is now pressed 3 times, 300 ms apart, so the camera reliably reacts even when EMEET ignores a single press. Change it in Settings > Camera (Presses per preset, Gap between presses).'
     ]
   },
   {

@@ -94,6 +94,9 @@ export interface AppConfig {
     sendMouseActivate: boolean
     clickHoldMs: number
     clickDelayMs: number
+    /** Press each EMEET preset button this many times (camera ignores a press now and then), with presetClickGapMs between presses. */
+    presetClickCount: number
+    presetClickGapMs: number
   }
   behavior: {
     requireStudioMode: boolean

@@ -61,7 +61,9 @@ export function defaultConfig(): AppConfig {
       sendToChildWindow: true,
       sendMouseActivate: false,
       clickHoldMs: 40,
-      clickDelayMs: 250
+      clickDelayMs: 250,
+      presetClickCount: 3,
+      presetClickGapMs: 300
     },
     behavior: {
       requireStudioMode: true,

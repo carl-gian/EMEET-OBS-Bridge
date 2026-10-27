@@ -96,7 +96,7 @@ in Settings > Camera.
 
 **Automation**
 - Automatic transition selection (Fade within a group, Fade to Black between groups), durations editable.
-- EMEET preset clicks timed against the transition, with de-duplication, correction of wrong guesses, and quick-fire for external scene changes.
+- EMEET preset clicks (each preset button is pressed 3 times, 300 ms apart, by default; configurable in Settings > Camera) timed against the transition, with de-duplication, correction of wrong guesses, and quick-fire for external scene changes.
 - Manual **Resync camera** (tray menu, window button, or the OBS dock) to re-press the current scene's preset.
 - Optional per-scene EMEET tracking on/off.
 - Optionally opens OBS when the app starts (if it is not already running) and starts EMEET Studio when needed.
