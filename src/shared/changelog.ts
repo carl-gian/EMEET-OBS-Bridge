@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.1.2',
+    date: '2026-10-28',
+    items: [
+      'Fixed: the Seamless picture and the fade and hold times set in the app were not reaching the OBS plugin (OBS answered "does not support custom settings" because the settings arrived before OBS had switched transitions). They are now applied after the switch, with retries.',
+      'The same fix makes the Fast Mode switch point setting take effect.'
+    ]
+  },
+  {
     version: '1.1.1',
     date: '2026-10-27',
     items: [

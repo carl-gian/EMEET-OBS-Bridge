@@ -275,10 +275,6 @@ export class Controller {
     const reqs: ObsRequest[] = [{ requestType: 'SetCurrentSceneTransition', requestData: { transitionName: name } }]
     // Our plugin sets its own duration (2 x fade + hold); OBS refuses a duration for such a transition.
     if (resolved.kind !== PLUGIN_KIND) reqs.push({ requestType: 'SetCurrentSceneTransitionDuration', requestData: { transitionDuration: dur } })
-    const cfgKind = this.cfg.transitions[dec.key].kind
-    if (dec.settings && resolved.kind === cfgKind) {
-      reqs.push({ requestType: 'SetCurrentSceneTransitionSettings', requestData: { transitionSettings: dec.settings, overlay: true } })
-    }
     try {
       const results = await this.d.obs.batch(reqs)
       for (const r of results ?? []) {
@@ -290,7 +286,30 @@ export class Controller {
       }
     } catch (e) {
       this.d.log.warn(`Prime batch failed: ${(e as Error).message}`)
+      return
     }
+    // The transition's own settings (picture, fade/hold, switch point) go in a SEPARATE request afterwards. Inside the batch they
+    // arrived while OBS was still on the OLD transition (OBS switches transitions on its UI thread, a moment later) and were
+    // refused with error 606 "does not support custom settings", so they were silently never applied.
+    const cfgKind = this.cfg.transitions[dec.key].kind
+    if (dec.settings && resolved.kind === cfgKind) await this.sendTransitionSettings(name, dec.settings)
+  }
+
+  private async sendTransitionSettings(name: string, settings: Record<string, unknown>) {
+    for (const waitMs of [120, 300, 700, 1500]) {
+      await new Promise((r) => setTimeout(r, waitMs))
+      if (this.appliedTransitionName !== name) return // something else was primed meanwhile
+      try {
+        await this.d.obs.call('SetCurrentSceneTransitionSettings', { transitionSettings: settings, overlay: true })
+        this.d.log.debug(`Transition settings applied to '${name}'.`)
+        return
+      } catch (e) {
+        if ((e as { code?: number }).code === 606 || /606|does not support custom settings/i.test((e as Error).message ?? '')) continue // OBS has not switched yet: try again
+        this.d.log.warn(`Could not set the settings of transition '${name}': ${(e as Error).message}`)
+        return
+      }
+    }
+    this.d.log.warn(`OBS kept refusing settings for transition '${name}' (606) - it may not be the transition OBS switched to.`)
   }
 
   private primeForCurrentPair(reason: string) {

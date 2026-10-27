@@ -1,7 +1,7 @@
 {
   "name": "obs-master-controller",
   "productName": "EMEET–OBS Bridge",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Studio Mode transitions + EMEET PTZ camera presets for OBS Studio",
   "main": "./out/main/index.js",
   "author": "Gi",

@@ -64,7 +64,9 @@ describe('Controller - Fast Mode', () => {
     const prime = t.batches.at(-1)!
     expect(prime[0].requestData.transitionName).toBe('Fade to Black')
     expect(prime[1].requestData.transitionDuration).toBe(1000)
-    expect(prime.some((r) => r.requestType === 'SetCurrentSceneTransitionSettings')).toBe(true)
+    expect(prime.some((r) => r.requestType === 'SetCurrentSceneTransitionSettings')).toBe(false) // sent on its own, after the switch
+    await vi.advanceTimersByTimeAsync(200)
+    expect(t.calls.some((c) => c.type === 'SetCurrentSceneTransitionSettings')).toBe(true)
 
     const t0 = Date.now()
     t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade to Black' })
@@ -213,7 +215,8 @@ describe('Controller - Seamless Mode (OBS plugin)', () => {
     const prime = t.batches.at(-1)!
     expect(prime[0].requestData.transitionName).toBe('My Seamless')
     expect(prime.some((r) => r.requestType === 'SetCurrentSceneTransitionDuration')).toBe(false)
-    expect(prime.find((r) => r.requestType === 'SetCurrentSceneTransitionSettings')!.requestData.transitionSettings).toEqual({ image_path: 'C:\\data\\card.png', fade_ms: 800, hold_ms: 3500 })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(t.calls.find((c) => c.type === 'SetCurrentSceneTransitionSettings')!.data.transitionSettings).toEqual({ image_path: 'C:\\data\\card.png', fade_ms: 800, hold_ms: 3500 })
     expect(t.c.pluginKindLoaded).toBe(true)
     expect(t.c.pluginInstanceFound).toBe(true)
 
@@ -256,5 +259,33 @@ describe('Controller - Seamless Mode (OBS plugin)', () => {
     expect(t.c.pluginKindLoaded).toBe(true)
     expect(t.c.pluginInstanceFound).toBe(true)
     expect(t.c.pluginTransitionName).toBeNull() // only set once it is the resolved cross-group transition
+  })
+})
+
+describe('Transition settings are applied after OBS has switched (606 race)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('retries when OBS still answers 606 (still on the old transition) and succeeds once it has switched', async () => {
+    const t = setup((c) => {
+      c.transitions.crossGroupMode = 'seamless'
+      c.plugin = { imagePath: 'C:\\data\\card.png', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' }
+    })
+    t.flags.pluginUsable = true
+    let attempts = 0
+    const realCall = (t.c as any).d.obs.call
+    ;(t.c as any).d.obs.call = async (type: string, data: any) => {
+      if (type === 'SetCurrentSceneTransitionSettings') {
+        attempts++
+        if (attempts < 3) throw Object.assign(new Error('The current transition does not support custom settings.'), { code: 606 })
+      }
+      return realCall(type, data)
+    }
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(attempts).toBe(3)
+    expect(t.logs.some((l) => /Transition settings applied/.test(l))).toBe(true)
   })
 })
