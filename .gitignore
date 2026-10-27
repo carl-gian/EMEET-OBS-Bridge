@@ -16,3 +16,7 @@ Other App Source Codes/
 OBS-Master-Controller.config.json
 config.json
 *.tsbuildinfo
+
+# the OBS plugin is built in CI and copied in before packaging
+resources/obs-plugin/*
+!resources/obs-plugin/.gitkeep

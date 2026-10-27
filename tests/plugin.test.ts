@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decidePluginState, parseInstalled, parseManifest, pickLatestPluginRelease, withPlugin, pluginTotalMs, PLUGIN_KIND, type PluginFacts } from '@core/plugin'
+import { chooseOffer, decidePluginState, parseInstalled, parseManifest, pickLatestPluginRelease, withPlugin, pluginTotalMs, PLUGIN_KIND, type PluginFacts } from '@core/plugin'
 import { defaultConfig } from '@core/defaults'
 
 const installed = { schema: 1, plugin: '1.0.1', obs: '32.2.2', kind: PLUGIN_KIND, minBridge: '1.1.0', layout: 'legacy' }
@@ -108,5 +108,25 @@ describe('withPlugin (Seamless Mode overlay)', () => {
     expect(withPlugin(fast, true)).toBe(fast)
     const s = seamless()
     expect(withPlugin(s, false)).toBe(s)
+  })
+})
+
+describe('chooseOffer (bundled copy vs GitHub)', () => {
+  const bundled = (plugin: string, obs: string) => ({ ...installed, plugin, obs })
+  const gh = (plugin: string, obs: string) => ({ ...manifest, plugin, obs })
+  it('uses whichever exists', () => {
+    expect(chooseOffer(null, null)).toBeNull()
+    expect(chooseOffer(null, bundled('1.0.1', '32.2.2'))?.source).toBe('bundled')
+    expect(chooseOffer(gh('1.0.1', '32.2.2'), null)?.source).toBe('github')
+  })
+  it('a tie goes to the bundled copy (no download needed)', () => {
+    expect(chooseOffer(gh('1.0.1', '32.2.2'), bundled('1.0.1', '32.2.2'))?.source).toBe('bundled')
+  })
+  it('a newer plugin version for the same OBS comes from GitHub', () => {
+    expect(chooseOffer(gh('1.0.2', '32.2.2'), bundled('1.0.1', '32.2.2'))?.source).toBe('github')
+  })
+  it('a plugin for a NEWER OBS always wins (forward-only), even with a lower plugin number', () => {
+    expect(chooseOffer(gh('1.0.0', '32.3.0'), bundled('1.5.0', '32.2.2'))?.source).toBe('github')
+    expect(chooseOffer(gh('1.5.0', '32.2.2'), bundled('1.0.0', '32.3.0'))?.source).toBe('bundled')
   })
 })

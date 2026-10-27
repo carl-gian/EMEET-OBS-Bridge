@@ -1,4 +1,4 @@
-import { Notification } from 'electron'
+import { app, Notification } from 'electron'
 import { exec, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
@@ -6,7 +6,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import AdmZip from 'adm-zip'
 import type { Log } from '@core/types'
-import { decidePluginState, parseInstalled, parseManifest, pickLatestPluginRelease, PLUGIN_FOLDER, type InstalledPlugin, type PluginDecision, type PluginManifest } from '@core/plugin'
+import { chooseOffer, decidePluginState, parseInstalled, parseManifest, pickLatestPluginRelease, PLUGIN_FOLDER, type InstalledPlugin, type PluginDecision, type PluginManifest } from '@core/plugin'
 import { compareVersions } from '@shared/changelog'
 import type { PluginInfo } from '@shared/types'
 
@@ -32,6 +32,8 @@ export interface PluginFactsSource {
 export class PluginManager {
   installed: InstalledPlugin | null = null
   manifest: PluginManifest | null = null
+  /** The copy that ships inside the Bridge installer (null in dev runs / builds without it). */
+  bundled: InstalledPlugin | null = null
   error = ''
   busy: '' | 'checking' | 'installing' = ''
   obsRunning = false
@@ -41,7 +43,30 @@ export class PluginManager {
   private timer: ReturnType<typeof setInterval> | null = null
   private notified = ''
 
-  constructor(private log: Log, private facts: PluginFactsSource, private bridgeVersion: string) {}
+  constructor(private log: Log, private facts: PluginFactsSource, private bridgeVersion: string) {
+    this.bundled = this.readBundled()
+  }
+
+  /** Folder inside the installed app that holds the bundled plugin (resources/obs-plugin/emeet-bridge-transition). */
+  get bundledDir(): string {
+    const root = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
+    return join(root, 'obs-plugin', PLUGIN_FOLDER)
+  }
+
+  private readBundled(): InstalledPlugin | null {
+    try {
+      const f = join(this.bundledDir, 'plugin.json')
+      if (!existsSync(f) || !existsSync(join(this.bundledDir, 'bin', '64bit', `${PLUGIN_FOLDER}.dll`))) return null
+      return parseInstalled(JSON.parse(readFileSync(f, 'utf8')))
+    } catch {
+      return null
+    }
+  }
+
+  /** The best plugin on offer, from GitHub or from the installer's own copy. */
+  get chosen() {
+    return chooseOffer(this.manifest, this.bundled)
+  }
 
   /** Where OBS looks for plugins (all users). null when not on Windows and no override is set. */
   get pluginDir(): string | null {
@@ -66,7 +91,7 @@ export class PluginManager {
     return decidePluginState({
       obsVersion: this.facts.obsVersion(),
       installed: this.installed,
-      manifest: this.manifest,
+      manifest: this.chosen?.offer ?? null,
       kindLoaded: this.facts.kindLoaded(),
       instanceFound: this.facts.instanceFound(),
       riskAcceptedObs: this.facts.riskAcceptedObs(),
@@ -85,8 +110,8 @@ export class PluginManager {
       usable: d.usable,
       installedVersion: this.installed?.plugin ?? '',
       builtForObs: this.installed?.obs ?? '',
-      latestVersion: this.manifest?.plugin ?? '',
-      latestObs: this.manifest?.obs ?? '',
+      latestVersion: this.chosen?.offer.plugin ?? '',
+      latestObs: this.chosen?.offer.obs ?? '',
       obsVersion: this.facts.obsVersion(),
       busy: this.busy,
       error: this.error,
@@ -141,57 +166,64 @@ export class PluginManager {
     try {
       const m = await this.fetchManifest()
       if (m) this.manifest = m
-      else if (!this.manifest) error = 'No OBS plugin release was found yet.'
+      else if (!this.manifest && !this.bundled) error = 'No OBS plugin release was found yet.'
     } catch (e) {
       error = `Could not check for a plugin update (${(e as Error).message}).`
       this.log.warn(`Plugin check failed: ${(e as Error).message}`)
     }
     this.set({ busy: '', error })
     const d = this.decision()
-    this.log.info(`OBS plugin: ${d.status}${this.installed ? ` (installed ${this.installed.plugin} for OBS ${this.installed.obs})` : ' (not installed)'}${this.manifest ? `; newest ${this.manifest.plugin} for OBS ${this.manifest.obs}` : ''}; OBS ${this.facts.obsVersion() || 'not connected'}`)
-    if (d.status === 'update-available' && this.manifest && this.notified !== this.manifest.plugin) {
-      this.notified = this.manifest.plugin
-      this.onUpdateFound(this.manifest.plugin)
+    const c = this.chosen
+    this.log.info(`OBS plugin: ${d.status}${this.installed ? ` (installed ${this.installed.plugin} for OBS ${this.installed.obs})` : ' (not installed)'}${c ? `; on offer ${c.offer.plugin} for OBS ${c.offer.obs} (${c.source === 'bundled' ? 'bundled with this app' : 'GitHub'})` : ''}; OBS ${this.facts.obsVersion() || 'not connected'}`)
+    if (d.status === 'update-available' && c && this.notified !== c.offer.plugin) {
+      this.notified = c.offer.plugin
+      this.onUpdateFound(c.offer.plugin)
     }
   }
 
   // ---------------------------------------------------------------- install ----
-  /** Download, verify and install the newest plugin. OBS must be closed (a running OBS keeps the DLL locked). */
+  /** Install the best plugin on offer: the copy bundled in this app (no download) or the newer one from GitHub. OBS must be closed (a running OBS keeps the DLL locked). */
   async install() {
     if (this.busy === 'installing') return
     const dest = this.pluginDir
     if (!dest) return this.set({ error: 'The OBS plugin can only be installed on Windows.' })
-    if (!this.manifest) {
+    if (!this.chosen) {
       await this.refresh()
-      if (!this.manifest) return this.set({ error: this.error || 'No OBS plugin release was found yet.' })
+      if (!this.chosen) return this.set({ error: this.error || 'No OBS plugin release was found yet.' })
     }
-    const m = this.manifest
-    if (compareVersions(m.minBridge, this.bridgeVersion) > 0) return this.set({ error: `This plugin needs EMEET–OBS Bridge ${m.minBridge} or newer. Please update the Bridge first.` })
+    const pick = this.chosen!
+    if (compareVersions(pick.offer.minBridge, this.bridgeVersion) > 0) return this.set({ error: `This plugin needs EMEET–OBS Bridge ${pick.offer.minBridge} or newer. Please update the Bridge first.` })
     this.obsRunning = await this.checkObsRunning()
     if (this.obsRunning) return this.set({ error: 'Close OBS first, then press Install again.' })
 
     this.set({ busy: 'installing', error: '' })
     const work = mkdtempSync(join(tmpdir(), 'emeet-plugin-'))
     try {
-      this.log.info(`Installing OBS plugin ${m.plugin} (for OBS ${m.obs}) from ${m.url}`)
-      const res = await fetch(m.url, { headers: { 'User-Agent': 'EMEET-OBS-Bridge' }, signal: AbortSignal.timeout(120000) })
-      if (!res.ok) throw new Error(`Download failed (GitHub answered ${res.status}).`)
-      const buf = Buffer.from(await res.arrayBuffer())
-      const sha = createHash('sha256').update(buf).digest('hex')
-      if (sha !== m.sha256) throw new Error('The downloaded plugin did not match its checksum, so it was not installed.')
-
-      const extracted = join(work, 'x')
-      new AdmZip(buf).extractAllTo(extracted, true)
-      const src = join(extracted, PLUGIN_FOLDER)
+      let src: string
+      if (pick.source === 'bundled') {
+        src = this.bundledDir
+        this.log.info(`Installing OBS plugin ${pick.offer.plugin} (for OBS ${pick.offer.obs}) from the copy bundled with this app.`)
+      } else {
+        const m = this.manifest!
+        this.log.info(`Installing OBS plugin ${m.plugin} (for OBS ${m.obs}) from ${m.url}`)
+        const res = await fetch(m.url, { headers: { 'User-Agent': 'EMEET-OBS-Bridge' }, signal: AbortSignal.timeout(120000) })
+        if (!res.ok) throw new Error(`Download failed (GitHub answered ${res.status}).`)
+        const buf = Buffer.from(await res.arrayBuffer())
+        const sha = createHash('sha256').update(buf).digest('hex')
+        if (sha !== m.sha256) throw new Error('The downloaded plugin did not match its checksum, so it was not installed.')
+        const extracted = join(work, 'x')
+        new AdmZip(buf).extractAllTo(extracted, true)
+        src = join(extracted, PLUGIN_FOLDER)
+      }
       const info = parseInstalled(existsSync(join(src, 'plugin.json')) ? JSON.parse(readFileSync(join(src, 'plugin.json'), 'utf8')) : null)
-      if (!info || info.plugin !== m.plugin || info.obs !== m.obs) throw new Error('The downloaded plugin package is not what the release says it is.')
-      if (!existsSync(join(src, 'bin', '64bit', `${PLUGIN_FOLDER}.dll`))) throw new Error('The downloaded plugin package has no plugin file in it.')
+      if (!info || info.plugin !== pick.offer.plugin || info.obs !== pick.offer.obs) throw new Error('The plugin package is not what it says it is.')
+      if (!existsSync(join(src, 'bin', '64bit', `${PLUGIN_FOLDER}.dll`))) throw new Error('The plugin package has no plugin file in it.')
 
       await this.copyIn(src, dest, work)
 
       this.installed = this.readInstalled()
-      if (!this.installed || this.installed.plugin !== m.plugin) throw new Error('The plugin was copied but could not be read back. Please try again.')
-      this.log.info(`OBS plugin ${m.plugin} installed into ${dest}. OBS must be (re)started to load it.`)
+      if (!this.installed || this.installed.plugin !== pick.offer.plugin) throw new Error('The plugin was copied but could not be read back. Please try again.')
+      this.log.info(`OBS plugin ${pick.offer.plugin} installed into ${dest}. OBS must be (re)started to load it.`)
       this.set({ busy: '', error: '' })
     } catch (e) {
       this.log.error(`OBS plugin install failed: ${(e as Error).message}`)
@@ -199,6 +231,22 @@ export class PluginManager {
     } finally {
       rmSync(work, { recursive: true, force: true })
     }
+  }
+
+  /**
+   * Called once right after the Bridge was installed (first run): if the plugin is not on this PC yet, put the copy that came
+   * with the installer in place. Windows may ask for permission once. Never repeats (the caller remembers it tried), never runs
+   * while OBS is open, and never replaces an existing plugin - updates stay a button the user presses.
+   */
+  async setupAfterInstall() {
+    await this.refresh()
+    if (this.installed || !this.bundled) return
+    if (this.obsRunning) {
+      this.log.info('OBS plugin: OBS is running, so the bundled plugin was not installed automatically. Close OBS and press "Install OBS plugin" in Settings.')
+      return
+    }
+    this.log.info('OBS plugin: first run after installing the Bridge - installing the bundled plugin.')
+    await this.install()
   }
 
   /** Copy the plugin folder into OBS's plugin folder; ask Windows for permission (UAC) only if a normal copy is refused. */

@@ -5,11 +5,31 @@ on:
     branches: [main]
   workflow_dispatch: # lets you press "Run workflow" by hand
 
+permissions:
+  contents: write # the plugin build workflow it calls can publish plugin releases
+
 jobs:
+  plugin:
+    uses: ./.github/workflows/obs-plugin.yml
+
   build:
+    needs: plugin
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: emeet-bridge-transition-obs*
+          path: plugin-art
+          merge-multiple: true
+      - name: Bundle the OBS plugin into the installer
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem plugin-art -Filter *.zip | Select-Object -First 1
+          if (-not $zip) { throw 'The plugin zip is missing from the plugin build.' }
+          New-Item -ItemType Directory -Force resources/obs-plugin | Out-Null
+          Expand-Archive $zip.FullName -DestinationPath resources/obs-plugin -Force
+          if (-not (Test-Path resources/obs-plugin/emeet-bridge-transition/plugin.json)) { throw 'plugin.json missing after unpacking' }
       - uses: actions/setup-node@v4
         with:
           node-version: 22

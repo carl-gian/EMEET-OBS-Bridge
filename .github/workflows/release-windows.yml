@@ -1,6 +1,7 @@
 name: Release Windows installer
 
-# Push a tag like v0.3.0 (after bumping "version" in package.json to 0.3.0) to publish an update.
+# Push a tag like v1.1.1 (after bumping "version" in package.json to 1.1.1) to publish an update.
+# The OBS plugin is built first and bundled into the installer (unified install).
 on:
   push:
     tags: ['v*']
@@ -9,10 +10,28 @@ permissions:
   contents: write
 
 jobs:
+  plugin:
+    uses: ./.github/workflows/obs-plugin.yml
+
   release:
+    needs: plugin
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: emeet-bridge-transition-obs*
+          path: plugin-art
+          merge-multiple: true
+      - name: Bundle the OBS plugin into the installer
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem plugin-art -Filter *.zip | Select-Object -First 1
+          if (-not $zip) { throw 'The plugin zip is missing from the plugin build.' }
+          New-Item -ItemType Directory -Force resources/obs-plugin | Out-Null
+          Expand-Archive $zip.FullName -DestinationPath resources/obs-plugin -Force
+          if (-not (Test-Path resources/obs-plugin/emeet-bridge-transition/plugin.json)) { Get-ChildItem -Recurse resources/obs-plugin | ForEach-Object FullName; throw 'plugin.json missing after unpacking' }
+          Get-Content resources/obs-plugin/emeet-bridge-transition/plugin.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22

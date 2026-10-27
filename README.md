@@ -187,10 +187,10 @@ Press **Open logs** or use the tray menu to open the log folder; **Send diagnost
 
 Seamless Mode needs a small plugin for OBS Studio, built in `obs-plugin/` and released separately from the app (GitHub tags `plugin-<version>`).
 
-- **Install:** Settings > Transition Rules > Seamless Mode > *Install OBS plugin* (close OBS first; Windows may ask for permission once). Then start OBS and add the transition once: Scene Transitions panel, **+**, *EMEET Bridge (fade, hold on picture, fade)*.
+- **Install:** the plugin comes inside the Bridge installer, and the first time the Bridge runs it puts the plugin in place (close OBS first; Windows may ask for permission once). Otherwise use Settings > Transition Rules > Seamless Mode > *Install OBS plugin*. Then start OBS and add the transition once: Scene Transitions panel, **+**, *EMEET Bridge (fade, hold on picture, fade)*.
 - **Version rules:** a plugin is built for exactly **one** OBS version, the latest stable (today **32.2.2**). When a new stable OBS is released we build a plugin for it and move forward; we never patch the plugin of an older OBS.
 - **If OBS changes version:** the app notices. If OBS is newer than the plugin was built for, Seamless Mode switches itself off (Fast Mode is used), the badge turns red and the app asks you to go back to the matching OBS version until a plugin update is released, or to carry on at your own risk (remembered for that OBS version only). If OBS is older, it asks you to update OBS.
-- **Updates:** the app checks GitHub for a newer plugin and shows a badge and a notification; installing it is one click. A plugin update does not need a new app version, and an app update does not need a new plugin.
+- **Updates:** the app checks GitHub for a newer plugin than the one it carries and shows a badge and a notification; installing it is one click. A plugin update does not need a new app version, and an app update does not need a new plugin.
 
 ## Updates
 

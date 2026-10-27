@@ -18,7 +18,13 @@ Notes
 - Unsigned builds work but Windows SmartScreen may warn; code signing is a separate decision.
 - The first build with this feature (0.2.1+) must be installed by hand; later versions update themselves.
 
-## Releasing the OBS plugin (separate from the app)
+## The OBS plugin is built into every app installer
+
+The app workflows (`release-windows.yml` for `v*` tags, `build-windows.yml` for `main`) first call `obs-plugin.yml`, which builds the plugin from `obs-plugin/`,
+then unpack it into `resources/obs-plugin/` before electron-builder runs, so it ships inside the installer (`extraResources`).
+Nothing extra to do for an app release. On the first run after a fresh install the app copies the bundled plugin into OBS's plugin folder (once, only if no plugin is installed).
+
+## Releasing the OBS plugin on its own (without a new app)
 
 The plugin lives in `obs-plugin/` and has its own releases. The app reads the newest `plugin-*` release's `plugin-manifest.json`.
 

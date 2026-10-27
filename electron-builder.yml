@@ -12,6 +12,9 @@ extraResources:
     to: ptz-worker.ps1
   - from: resources/icon.ico
     to: icon.ico
+  # The OBS plugin built in CI (see the release workflow); resources/obs-plugin is empty in dev runs.
+  - from: resources/obs-plugin
+    to: obs-plugin
 # Auto-update feed: electron-builder uploads latest.yml + installer to a GitHub Release (see docs/RELEASING.md).
 publish:
   provider: github

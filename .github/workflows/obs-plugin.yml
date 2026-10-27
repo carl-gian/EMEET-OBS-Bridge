@@ -3,6 +3,7 @@ name: Build OBS plugin
 # Builds the EMEET-OBS Bridge Transition plugin for ONE pinned OBS version (see obs-plugin/buildspec.json).
 # Tags named plugin-<version> (for example plugin-1.0.0) publish a GitHub pre-release holding the zip and plugin-manifest.json.
 # Plugin tags must never start with "v": those start the Bridge app release workflow.
+# It is also called by the app workflows (release-windows.yml, build-windows.yml): the plugin zip is bundled into the installer.
 on:
   push:
     tags: ['plugin-*']
@@ -11,6 +12,7 @@ on:
       - 'obs-plugin/**'
       - '.github/workflows/obs-plugin.yml'
   workflow_dispatch:
+  workflow_call: # the app's own workflows call this so the plugin is built into every installer
 
 permissions:
   contents: write

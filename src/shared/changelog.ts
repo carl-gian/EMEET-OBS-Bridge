@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.1.1',
+    date: '2026-10-27',
+    items: [
+      'One installer: the OBS plugin for Seamless Mode now comes inside the EMEET–OBS Bridge installer. On the very first run the app puts the plugin in place for you (Windows may ask for permission once; close OBS first). No separate download is needed, and it works offline.',
+      'You can still update the plugin on its own: when a newer plugin is released the app shows a badge and installs it with one click, without a new version of the app.'
+    ]
+  },
+  {
     version: '1.1.0',
     date: '2026-10-27',
     items: [

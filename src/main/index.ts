@@ -18,7 +18,7 @@ import { Updater } from './updater'
 import { PluginManager } from './pluginManager'
 import { launchInfo } from '@shared/changelog'
 import { SUPPORT_EMAIL } from '@shared/support'
-import { readLastSeenVersion, writeLastSeenVersion } from './appState'
+import { readLastSeenVersion, readPluginSetupTried, writeLastSeenVersion, writePluginSetupTried } from './appState'
 
 const isWin = process.platform === 'win32'
 let win: BrowserWindow | null = null
@@ -252,6 +252,11 @@ function main() {
   if (c0.general.launchObsOnStart) void launchObs(c0)
   obs.start()
   plugins.start()
+  // Unified install: the installer ships the plugin; on the very first run, put it in place (once).
+  if (launch.kind === 'first-run' && readPluginSetupTried() !== version) {
+    writePluginSetupTried(version)
+    setTimeout(() => void plugins!.setupAfterInstall(), 4000)
+  }
   updater.start()
 
   store.onExternalChange = (cfg) => {

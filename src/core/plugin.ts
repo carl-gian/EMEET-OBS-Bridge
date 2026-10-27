@@ -56,6 +56,22 @@ export interface PluginManifest {
   file: string
 }
 
+/** What a plugin source (GitHub release or the copy bundled in the installer) can offer. */
+export type PluginOffer = Pick<PluginManifest, 'plugin' | 'obs' | 'minBridge'>
+
+/**
+ * Picks the plugin to install: the one built for the NEWER OBS wins (forward-only), then the higher plugin version.
+ * A tie goes to the copy bundled in the installer, because it needs no download.
+ */
+export function chooseOffer(manifest: PluginManifest | null, bundled: InstalledPlugin | null): { source: 'bundled' | 'github'; offer: PluginOffer } | null {
+  const b = bundled ? { source: 'bundled' as const, offer: { plugin: bundled.plugin, obs: bundled.obs, minBridge: bundled.minBridge } } : null
+  const g = manifest ? { source: 'github' as const, offer: { plugin: manifest.plugin, obs: manifest.obs, minBridge: manifest.minBridge } } : null
+  if (!b || !g) return b ?? g
+  const byObs = compareVersions(g.offer.obs, b.offer.obs)
+  if (byObs !== 0) return byObs > 0 ? g : b
+  return compareVersions(g.offer.plugin, b.offer.plugin) > 0 ? g : b
+}
+
 export type PluginStatus =
   | 'unknown' // OBS not connected, so nothing can be judged yet
   | 'not-installed' // no plugin files on this PC
@@ -71,7 +87,7 @@ export type PluginStatus =
 export interface PluginFacts {
   obsVersion: string // '' when OBS is not connected
   installed: InstalledPlugin | null
-  manifest: PluginManifest | null
+  manifest: PluginOffer | null // the best plugin on offer (see chooseOffer)
   kindLoaded: boolean // OBS lists our transition kind (plugin loaded)
   instanceFound: boolean // a transition of our kind exists in OBS's Scene Transitions panel
   riskAcceptedObs: string // OBS version the user accepted the risk for ('' = none)
