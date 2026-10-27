@@ -33,6 +33,8 @@ export interface Deps {
   ptzLog: Log
   log: Log
   getConfig: () => AppConfig
+  /** True when our OBS plugin is installed, loaded and matches this OBS, so Seamless Mode may use it. */
+  getPluginUsable?: () => boolean
   now?: () => number
   onChange?: () => void
 }

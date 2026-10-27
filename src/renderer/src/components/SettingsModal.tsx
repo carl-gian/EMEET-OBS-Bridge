@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { AppConfig, Point } from '@shared/types'
+import type { AppConfig, PluginInfo, Point } from '@shared/types'
 import { DEFAULT_PRESETS, MAX_PRESETS, MIN_PRESETS, presetNumber } from '@shared/presets'
 import { Button, Field, HelpTip, NumInput, Select, Switch, TextInput } from './ui'
 
 const DOCK_NAME = 'EMEET Partner'
 const DOCK_URL = 'http://127.0.0.1:4577/dock'
 
-type Tab = 'general' | 'obs' | 'transitions' | 'camera'
+export type SettingsTab = 'general' | 'obs' | 'transitions' | 'camera'
+type Tab = SettingsTab
 const TABS: { id: Tab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'obs', label: 'OBS' },
@@ -16,14 +17,34 @@ const TABS: { id: Tab; label: string }[] = [
 
 const TAB_HELP: Record<Tab, string> = { general: 'app', obs: 'dock', transitions: 'transitions', camera: 'more' }
 
-export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }: { cfg: AppConfig; dryRun: boolean; onClose: () => void; onSaved: (c: AppConfig) => void; onHelp: (topic: string) => void }) {
-  const [tab, setTab] = useState<Tab>('general')
+export default function SettingsModal({
+  cfg,
+  dryRun,
+  plugin,
+  initialTab = 'general',
+  onClose,
+  onSaved,
+  onHelp
+}: {
+  cfg: AppConfig
+  dryRun: boolean
+  plugin: PluginInfo
+  initialTab?: SettingsTab
+  onClose: () => void
+  onSaved: (c: AppConfig) => void
+  onHelp: (topic: string) => void
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab)
+  const [cardPreview, setCardPreview] = useState<string | null>(null)
   const [d, setD] = useState<AppConfig>(() => JSON.parse(JSON.stringify(cfg)))
   const [showPw, setShowPw] = useState(false)
   const [msg, setMsg] = useState('')
   const [unlocked, setUnlocked] = useState(false) // preset coordinates are locked until "Edit presets"
   const [confirmReset, setConfirmReset] = useState(false)
 
+  useEffect(() => {
+    void window.api.holdingCardPreview().then(setCardPreview)
+  }, [d.plugin.imagePath])
   const switchPoint = Number(d.transitions.crossGroup.settings?.['switch_point'] ?? 50)
 
   // update a deep copy of the draft
@@ -258,11 +279,21 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
                       <span className="block text-xs text-mute">One fade through black. The EMEET preset is clicked as soon as you press Transition in OBS, so the camera moves while the picture fades. For a slow camera, make the fade longer and the switch point later.</span>
                     </span>
                   </label>
+                  <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${d.transitions.crossGroupMode === 'seamless' ? 'border-accent bg-accent/10' : 'border-line'}`}>
+                    <input type="radio" checked={d.transitions.crossGroupMode === 'seamless'} onChange={() => edit((c) => (c.transitions.crossGroupMode = 'seamless'))} />
+                    <span>
+                      <span className="font-medium">Seamless Mode - hold on a picture</span>
+                      <span className="block text-xs text-mute">
+                        Press Transition as usual: the picture fades out to your chosen picture, stays while the camera moves, then fades to the next scene. Preview is never touched. Uses the
+                        EMEET–OBS Bridge plugin for OBS, which this app installs for you.
+                      </span>
+                    </span>
+                  </label>
                 </div>
 
-                <div className="mb-3 rounded-md border border-dashed border-line px-3 py-2 text-xs text-mute">
-                  <b className="text-ink">Seamless Mode - work in progress.</b> A mode that holds on a picture while the camera moves is being built as an OBS plugin and will return in a later update.
-                </div>
+                {d.transitions.crossGroupMode === 'seamless' && (
+                  <SeamlessPanel d={d} edit={edit} plugin={plugin} cardPreview={cardPreview} setMsg={setMsg} hasObsPath={!!d.general.obsPath} />
+                )}
 
                 {d.transitions.crossGroupMode === 'fast' && (
                   <div className="flex items-end gap-3">
@@ -533,6 +564,121 @@ export default function SettingsModal({ cfg, dryRun, onClose, onSaved, onHelp }:
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Texts and buttons for each state of the OBS plugin (the version contract lives in src/core/plugin.ts). */
+function SeamlessPanel({
+  d,
+  edit,
+  plugin,
+  cardPreview,
+  setMsg,
+  hasObsPath
+}: {
+  d: AppConfig
+  edit: (fn: (c: AppConfig) => void) => void
+  plugin: PluginInfo
+  cardPreview: string | null
+  setMsg: (m: string) => void
+  hasObsPath: boolean
+}) {
+  const total = 2 * d.plugin.fadeMs + d.plugin.holdMs
+  const busy = plugin.busy !== ''
+  const s = plugin.status
+  const tone = s === 'ready' ? 'bg-ok/10 text-ok' : s === 'obs-newer' || s === 'obs-older' ? 'bg-bad/10 text-bad' : s === 'update-available' ? 'bg-accent/15 text-accent' : 'bg-warn/10 text-warn'
+
+  const message: Record<PluginInfo['status'], string> = {
+    unknown: 'Connect to OBS so the plugin can be checked. Until then Fast Mode is used.',
+    'not-installed': plugin.latestVersion ? `The OBS plugin is not installed yet. Version ${plugin.latestVersion} (for OBS ${plugin.latestObs}) is ready to install. Until then Fast Mode is used.` : 'The OBS plugin is not installed yet, and no plugin release was found online. Until then Fast Mode is used.',
+    'restart-obs': 'The plugin is installed. Start (or restart) OBS so it can load the plugin. Until then Fast Mode is used.',
+    'needs-transition': 'The plugin is loaded in OBS, but the transition has not been added yet. In OBS, in the Scene Transitions panel, click "+" and choose "EMEET Bridge (fade, hold on picture, fade)". Leave its settings alone: they come from this app. Then press Check again.',
+    ready: `Ready: plugin ${plugin.installedVersion} for OBS ${plugin.builtForObs}.`,
+    'update-available': `A newer plugin (${plugin.latestVersion}) is available for OBS ${plugin.latestObs}. The installed one (${plugin.installedVersion}) is still used until you update.`,
+    'obs-newer': `OBS ${plugin.obsVersion} is newer than the OBS the plugin was built for (${plugin.builtForObs}). Go back to OBS ${plugin.builtForObs} until a plugin update is released, or carry on at your own risk. Until you decide, Fast Mode is used.`,
+    'obs-older': `This plugin was built for OBS ${plugin.builtForObs}, but OBS ${plugin.obsVersion} is running. Please update OBS to ${plugin.builtForObs} (only the latest stable OBS is supported). Until then Fast Mode is used.`,
+    'risk-accepted': `Carrying on at your own risk: the plugin was built for OBS ${plugin.builtForObs} but OBS ${plugin.obsVersion} is running. It may misbehave during a live meeting.`,
+    'bridge-too-old': `The newest plugin needs a newer EMEET–OBS Bridge. Please update the Bridge first.`
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-line p-3">
+      <div className="mb-2 flex items-center text-sm font-medium">
+        Seamless Mode settings
+        <HelpTip title="How the times work">
+          On Transition, the picture fades in over the <b>fade time</b>, stays for the <b>hold time</b>, then fades to the next scene over the <b>fade time</b>. The total is 2 x fade + hold.
+          The camera is clicked when the first fade ends, so it moves while the picture covers the screen. The total is set in OBS by the plugin itself; you never need to touch OBS's Duration box.
+        </HelpTip>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="flex h-[72px] w-[128px] shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-black text-[11px] text-mute">
+          {cardPreview ? <img src={cardPreview} alt="Picture preview" className="h-full w-full object-contain" /> : 'Plain black'}
+        </div>
+        <div className="flex flex-col items-start gap-2">
+          <Button
+            onClick={async () => {
+              const r = await window.api.chooseHoldingCard()
+              if (r.ok && r.cfg) edit((c) => (c.plugin.imagePath = r.cfg!.plugin.imagePath))
+              else if (r.error) setMsg(r.error)
+            }}
+          >
+            {d.plugin.imagePath ? 'Change picture ...' : 'Choose picture ...'}
+          </Button>
+          {d.plugin.imagePath && (
+            <Button
+              kind="ghost"
+              onClick={async () => {
+                const r = await window.api.removeHoldingCard()
+                if (r.ok) edit((c) => (c.plugin.imagePath = ''))
+              }}
+            >
+              Remove picture
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-mute">A 16:9 PNG or JPG (for example 1920 x 1080) fills the screen; other shapes get black bars. With no picture the screen goes plain black.</div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div>
+          <div className="mb-1 text-xs text-mute">Fade time (ms) - each of the two fades</div>
+          <NumInput value={d.plugin.fadeMs} onChange={(v) => edit((c) => (c.plugin.fadeMs = Math.max(0, Math.min(10000, Math.round(v)))))} />
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-mute">Hold time (ms) - picture stays</div>
+          <NumInput value={d.plugin.holdMs} onChange={(v) => edit((c) => (c.plugin.holdMs = Math.max(0, Math.min(60000, Math.round(v)))))} />
+        </div>
+        <div className="pb-2 text-xs text-mute">
+          Total <b className="text-ink">{(total / 1000).toFixed(1)} s</b> - camera clicks at {(d.plugin.fadeMs / 1000).toFixed(1)} s
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-mute">Press Save to apply the mode and the times. The picture is applied right away.</div>
+
+      <div className="mt-4 text-sm font-medium">OBS plugin</div>
+      <div className={`mt-1 rounded-md px-3 py-2 text-xs ${tone}`}>{message[s]}</div>
+      {plugin.error && <div className="mt-2 rounded-md bg-bad/10 px-3 py-2 text-xs text-bad">{plugin.error}</div>}
+      {plugin.busy === 'installing' && <div className="mt-2 text-xs text-mute">Installing the plugin ... Windows may ask for permission once.</div>}
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {(s === 'not-installed' || s === 'update-available') && (
+          <Button kind="primary" disabled={busy || !plugin.latestVersion} onClick={() => void window.api.pluginInstall()}>
+            {s === 'update-available' ? `Update plugin to ${plugin.latestVersion}` : 'Install OBS plugin'}
+          </Button>
+        )}
+        {(s === 'not-installed' || s === 'update-available') && plugin.obsRunning && <span className="text-xs text-warn">OBS is running: close it first, then press the button.</span>}
+        {(s === 'restart-obs' || s === 'not-installed') && hasObsPath && !plugin.obsRunning && (
+          <Button onClick={() => void window.api.openObs()} disabled={busy}>
+            Open OBS
+          </Button>
+        )}
+        {s === 'obs-newer' && <Button onClick={() => void window.api.pluginRisk(true)}>Use anyway (my own risk)</Button>}
+        {s === 'risk-accepted' && <Button onClick={() => void window.api.pluginRisk(false)}>Stop (go back to Fast Mode)</Button>}
+        <Button kind="ghost" disabled={busy} onClick={() => void window.api.pluginCheck()}>
+          {plugin.busy === 'checking' ? 'Checking ...' : 'Check again'}
+        </Button>
       </div>
     </div>
   )

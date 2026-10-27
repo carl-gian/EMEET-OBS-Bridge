@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.1.0',
+    date: '2026-10-27',
+    items: [
+      'Seamless Mode is back, and it no longer touches OBS Preview. Press Transition as usual: the screen fades (0.8 s) to a picture of your choice, holds it (3.5 s) while the camera moves, then fades (0.8 s) to the next scene. Choose the picture and the times in Settings > Transition Rules.',
+      'It works through a small plugin for OBS that this app installs and updates for you (Settings > Transition Rules > Seamless Mode). The plugin sets its own length, so OBS needs no settings.',
+      'A new badge shows the plugin state. If OBS is updated to a version the plugin was not built for, the app falls back to Fast Mode and asks you to go back to the matching OBS version, or to carry on at your own risk, until a plugin update is released.',
+      'Plugin updates arrive on their own, without a new version of the app.'
+    ]
+  },
+  {
     version: '1.0.6',
     date: '2026-10-25',
     items: [

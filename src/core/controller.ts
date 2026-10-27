@@ -2,8 +2,8 @@ import type { AppConfig } from '@shared/types'
 import { buildGroupMap, decide, normalizeSceneKey, resolveGroup, type Decision } from './decision'
 import { PtzDispatcher } from './ptzDispatcher'
 import type { Deps, ObsRequest } from './types'
+import { PLUGIN_KIND, withPlugin } from './plugin'
 
-type BridgeState = 'Idle' | 'Armed' | 'FadingToBlack' | 'Holding' | 'FadingIn'
 type Key = 'intraGroup' | 'crossGroup'
 interface Resolved {
   name: string | null
@@ -12,13 +12,10 @@ interface Resolved {
 
 /**
  * The decision engine / state machine. A faithful port of the PowerShell controller's event handling
- * (Fast Mode, quick-fire, manual resync, priming) plus Seamless Mode (fade to a black scene, move the camera, hold, fade to the target).
+ * (Fast Mode, quick-fire, manual resync, priming). Seamless Mode uses our OBS plugin transition (fade to a picture, hold, fade to the next scene):
+ * the plugin does the visuals inside OBS and this controller only selects it, configures it and times the camera click.
  * It never touches Electron, the network or Win32 directly - everything goes through `Deps`.
  */
-/** Names of the two sources the app keeps inside the Seamless holding scene. */
-const HOLD_BLACK = 'EMEET Bridge - black'
-const HOLD_CARD = 'EMEET Bridge - holding card'
-
 export class Controller {
   readonly ptz: PtzDispatcher
 
@@ -29,7 +26,9 @@ export class Controller {
   obsScenes: string[] = []
   obsVersion = ''
   wsVersion = ''
-  bridgeState: BridgeState = 'Idle'
+  /** Filled in from OBS: is our plugin's transition kind loaded, and does a transition of that kind exist in the Scene Transitions panel? */
+  pluginKindLoaded = false
+  pluginInstanceFound = false
 
   private transitionInFlight = false
   private transitionInFlightSince = 0
@@ -39,11 +38,6 @@ export class Controller {
   private ownSets = new Map<string, number>() // values WE sent recently (their echo events are expected)
   private resolved: Record<Key, Resolved> = { intraGroup: { name: null, kind: null }, crossGroup: { name: null, kind: null } }
   private groupMap = new Map<string, string>()
-  private bridgeSceneName: string | null = null
-  private bridgeActive = false
-  private bridgeTarget: string | null = null
-  private bridgeSince = 0
-  private bridgeTimer: ReturnType<typeof setTimeout> | null = null
   private ready = false
   private _dryRun = false
 
@@ -53,7 +47,7 @@ export class Controller {
   }
 
   private get cfg(): AppConfig {
-    return this.d.getConfig()
+    return withPlugin(this.d.getConfig(), this.d.getPluginUsable?.() ?? false)
   }
   private now() {
     return (this.d.now ?? Date.now)()
@@ -84,10 +78,11 @@ export class Controller {
   onConfigChanged() {
     this.rebuildGroupMap()
     if (this.ready) {
-      this.bridgeSetup()
       this.appliedTransitionName = '' // force the next prime to re-send with the new durations/names
       this.appliedDurationMs = -1
       void this.resolveTransitionNames().then(() => {
+        this.logCrossMode()
+        this.changed()
         if (!this.transitionInFlight) this.primeForCurrentPair('settings changed')
       })
     }
@@ -128,7 +123,7 @@ export class Controller {
     if (unmapped.length) log.info('Scenes not mapped to any preset (treated as intra-group, plain fade): ' + unmapped.join(' | '))
 
     await this.resolveTransitionNames()
-    this.bridgeSetup()
+    this.logCrossMode()
 
     const cur = await this.safeCall('GetCurrentSceneTransition')
     if (cur) {
@@ -159,7 +154,8 @@ export class Controller {
     this.ready = false
     this.transitionInFlight = false
     this.pendingCrossCheck = null
-    this.resetBridge('disconnected')
+    this.pluginKindLoaded = false
+    this.pluginInstanceFound = false
     this.changed()
   }
 
@@ -187,6 +183,9 @@ export class Controller {
       return
     }
     const list: { transitionName: string; transitionKind: string }[] = resp.transitions ?? []
+    this.pluginInstanceFound = list.some((t) => t.transitionKind === PLUGIN_KIND)
+    const kinds = await this.safeCall('GetTransitionKindList')
+    this.pluginKindLoaded = (kinds?.transitionKinds ?? []).includes(PLUGIN_KIND)
     for (const key of ['intraGroup', 'crossGroup'] as const) {
       const c = this.cfg.transitions[key]
       let hit = list.find((t) => t.transitionName === c.name)
@@ -209,7 +208,7 @@ export class Controller {
         )
         this.resolved[key] = { name: null, kind: null }
       } else {
-        if (how === 'kind') this.d.log.warn(`No transition named '${c.name}'; falling back to '${hit.transitionName}' (kind ${hit.transitionKind}).`)
+        if (how === 'kind' && hit.transitionKind !== PLUGIN_KIND) this.d.log.warn(`No transition named '${c.name}'; falling back to '${hit.transitionName}' (kind ${hit.transitionKind}).`)
         this.resolved[key] = { name: hit.transitionName, kind: hit.transitionKind }
         this.d.log.info(`Resolved ${key} -> '${hit.transitionName}' [${hit.transitionKind}] (by ${how})`)
       }
@@ -234,126 +233,22 @@ export class Controller {
     this.d.log.info(`Scene-transition-override sweep complete: ${cleared} cleared.`)
   }
 
-  private bridgeSetup() {
-    const want = this.cfg.transitions.crossGroupMode === 'seamless'
-    if (want && !this._dryRun) {
-      void this.syncHoldingScene()
-      // If the scene is missing it is created first; the sync re-checks afterwards. Otherwise check right away.
-      if (!this.findBridgeScene()) return
+  /** One log line saying what happens when the camera has to move. */
+  private logCrossMode() {
+    const raw = this.d.getConfig()
+    const usable = this.d.getPluginUsable?.() ?? false
+    if (raw.transitions.crossGroupMode === 'seamless') {
+      if (usable)
+        this.d.log.info(`Cross-group mode: Seamless (OBS plugin: fade ${raw.plugin.fadeMs} ms, hold ${raw.plugin.holdMs} ms, fade ${raw.plugin.fadeMs} ms; camera click ${raw.plugin.fadeMs} ms after the transition starts).`)
+      else this.d.log.warn('Seamless Mode is selected but the OBS plugin is not ready (see the plugin badge / Settings > Transition Rules). Using Fast Mode until it is.')
+    } else {
+      this.d.log.info('Cross-group mode: Fast Mode (camera click ' + (raw.ptz.fireOffsetMs > 0 ? raw.ptz.fireOffsetMs + ' ms after the transition starts' : 'immediately when the transition starts') + ').')
     }
-    this.evaluateBridge()
-  }
-
-  private findBridgeScene() {
-    const bn = this.cfg.seamless.sceneName
-    return this.obsScenes.find((s) => normalizeSceneKey(s) === normalizeSceneKey(bn)) ?? null
-  }
-
-  private evaluateBridge() {
-    const want = this.cfg.transitions.crossGroupMode === 'seamless'
-    const bn = this.cfg.seamless.sceneName
-    this.bridgeSceneName = this.findBridgeScene()
-    this.bridgeActive = want && !!this.bridgeSceneName
-    if (want && !this.bridgeActive)
-      this.d.log.error(`Seamless Mode is selected but OBS has no scene named '${bn}' and it could not be created. Falling back to Fast Mode.`)
-    else if (this.bridgeActive) this.d.log.info(`Seamless Mode ACTIVE via '${this.bridgeSceneName}'  (fade to black ${this.cfg.seamless.fadeToBlackMs} ms, hold ${this.cfg.seamless.holdMs} ms, fade in ${this.cfg.seamless.fadeInMs} ms${this.cfg.seamless.cardImage ? ', holding card picture' : ', plain black'}).`)
-    else this.d.log.info('Cross-group mode: Fast Mode (camera click ' + (this.cfg.ptz.fireOffsetMs > 0 ? this.cfg.ptz.fireOffsetMs + ' ms after the transition starts' : 'immediately when the transition starts') + ').')
-    if (!this.bridgeActive) this.resetBridge('bridge not active')
-  }
-
-  /**
-   * Makes sure the Seamless "holding" scene exists in OBS: a black Color Source, plus the uploaded holding-card picture
-   * (scaled to fit the canvas) when there is one. Creates the scene if it is missing, so nobody has to build it by hand.
-   * Safe to run repeatedly; never touches anything the owner put in a scene they made themselves except our own two sources.
-   */
-  private holdingSyncing = false
-  private holdingAgain = false
-  private async syncHoldingScene() {
-    if (this.holdingSyncing) {
-      this.holdingAgain = true
-      return
-    }
-    this.holdingSyncing = true
-    try {
-      const log = this.d.log
-      const sceneName = this.findBridgeScene() ?? this.cfg.seamless.sceneName
-      if (!sceneName) return
-      const vs = await this.safeCall('GetVideoSettings')
-      const w = Number(vs?.baseWidth) || 1920
-      const h = Number(vs?.baseHeight) || 1080
-      if (!this.findBridgeScene()) {
-        const r = await this.safeCall('CreateScene', { sceneName })
-        if (!r) {
-          log.error(`Could not create the holding scene '${sceneName}' in OBS.`)
-          return
-        }
-        log.info(`Created the holding scene '${sceneName}' in OBS (black background).`)
-        await this.addSource(sceneName, HOLD_BLACK, 'color_source_v3', { color: 4278190080, width: w, height: h })
-      }
-      const file = this.cfg.seamless.cardImage
-      const items: { sourceName: string }[] = (await this.safeCall('GetSceneItemList', { sceneName }))?.sceneItems ?? []
-      const hasCard = items.some((i) => i.sourceName === HOLD_CARD)
-      if (file && hasCard) {
-        await this.safeCall('SetInputSettings', { inputName: HOLD_CARD, inputSettings: { file }, overlay: true })
-        log.info(`Holding card picture updated in '${sceneName}'.`)
-      } else if (file) {
-        const id = await this.addSource(sceneName, HOLD_CARD, 'image_source', { file })
-        if (id !== null) {
-          await this.safeCall('SetSceneItemTransform', {
-            sceneName,
-            sceneItemId: id,
-            sceneItemTransform: { positionX: w / 2, positionY: h / 2, alignment: 0, boundsType: 'OBS_BOUNDS_SCALE_INNER', boundsAlignment: 0, boundsWidth: w, boundsHeight: h }
-          })
-          log.info(`Holding card picture added to '${sceneName}'.`)
-        }
-      } else if (hasCard) {
-        await this.safeCall('RemoveInput', { inputName: HOLD_CARD })
-        log.info(`Holding card picture removed from '${sceneName}' (back to plain black).`)
-      }
-    } catch (e) {
-      this.d.log.warn(`Holding scene sync failed: ${(e as Error).message}`)
-    } finally {
-      this.holdingSyncing = false
-      await this.refreshSceneList()
-      this.evaluateBridge()
-      if (this.holdingAgain) {
-        this.holdingAgain = false
-        void this.syncHoldingScene()
-      }
-    }
-  }
-
-  /** Creates an OBS input inside a scene, or re-uses the input if one with that name already exists. Returns the scene item id. */
-  private async addSource(sceneName: string, inputName: string, inputKind: string, inputSettings: Record<string, unknown>): Promise<number | null> {
-    const made = await this.safeCall('CreateInput', { sceneName, inputName, inputKind, inputSettings, sceneItemEnabled: true })
-    if (made) return Number(made.sceneItemId)
-    const reuse = await this.safeCall('CreateSceneItem', { sceneName, sourceName: inputName, sceneItemEnabled: true })
-    if (reuse) {
-      if (inputKind === 'image_source') await this.safeCall('SetInputSettings', { inputName, inputSettings, overlay: true })
-      return Number(reuse.sceneItemId)
-    }
-    return null
   }
 
   // ------------------------------------------------------------------ priming ----
   private currentDecision(): Decision {
     return decide(this.cfg, this.groupMap, this.programScene, this.previewScene)
-  }
-
-  /** Plain fade (the same-preset transition) with its own duration - used for the two Seamless fades. */
-  private intraDecision(origin: string, target: string, durationMs?: number): Decision {
-    const t = this.cfg.transitions.intraGroup
-    return {
-      isCrossGroup: false,
-      origin,
-      target,
-      originGroup: null,
-      targetGroup: null,
-      key: 'intraGroup',
-      transitionName: t.name,
-      durationMs: durationMs ?? t.durationMs,
-      settings: t.settings
-    }
   }
 
   private async applyTransitionState(dec: Decision, reason: string) {
@@ -377,10 +272,9 @@ export class Controller {
       this.d.log.info('        (DryRun: nothing sent)')
       return
     }
-    const reqs: ObsRequest[] = [
-      { requestType: 'SetCurrentSceneTransition', requestData: { transitionName: name } },
-      { requestType: 'SetCurrentSceneTransitionDuration', requestData: { transitionDuration: dur } }
-    ]
+    const reqs: ObsRequest[] = [{ requestType: 'SetCurrentSceneTransition', requestData: { transitionName: name } }]
+    // Our plugin sets its own duration (2 x fade + hold); OBS refuses a duration for such a transition.
+    if (resolved.kind !== PLUGIN_KIND) reqs.push({ requestType: 'SetCurrentSceneTransitionDuration', requestData: { transitionDuration: dur } })
     const cfgKind = this.cfg.transitions[dec.key].kind
     if (dec.settings && resolved.kind === cfgKind) {
       reqs.push({ requestType: 'SetCurrentSceneTransitionSettings', requestData: { transitionSettings: dec.settings, overlay: true } })
@@ -409,50 +303,6 @@ export class Controller {
     void this.applyTransitionState(dec, reason)
   }
 
-  // ------------------------------------------------------------ Seamless Mode ----
-  private resetBridge(why: string) {
-    if (this.bridgeState !== 'Idle') (why === 'complete' ? this.d.log.debug : this.d.log.warn)(`SEAMLESS reset (${why}).`)
-    this.bridgeState = 'Idle'
-    this.bridgeTarget = null
-    if (this.bridgeTimer) clearTimeout(this.bridgeTimer)
-    this.bridgeTimer = null
-  }
-
-  private startBridgeArm(dec: Decision) {
-    const black = this.bridgeSceneName!
-    this.bridgeTarget = dec.target
-    this.bridgeState = 'Armed'
-    this.bridgeSince = this.now()
-    this.d.log.info(
-      `SEAMLESS ARMED  remembered target '${dec.target}'; Preview now shows '${black}'. Press Transition once: fade to black ${this.cfg.seamless.fadeToBlackMs} ms -> camera -> hold ${this.cfg.seamless.holdMs} ms -> fade to target ${this.cfg.seamless.fadeInMs} ms.`
-    )
-    this.previewScene = black
-    void this.applyTransitionState(this.intraDecision(this.programScene, black, this.cfg.seamless.fadeToBlackMs), 'seamless armed (origin -> black)')
-    if (!this._dryRun) void this.safeCall('SetCurrentPreviewScene', { sceneName: black })
-  }
-
-  private processBridgeRelease() {
-    if (this.bridgeState !== 'Holding') return
-    const black = this.bridgeSceneName!
-    const target = this.bridgeTarget!
-    this.bridgeState = 'FadingIn'
-    this.bridgeSince = this.now()
-    this.d.log.info(`SEAMLESS RELEASE  '${black}' -> '${target}' (fade ${this.cfg.seamless.fadeInMs} ms)`)
-    this.programScene = black
-    this.previewScene = target
-    void (async () => {
-      await this.applyTransitionState(this.intraDecision(black, target, this.cfg.seamless.fadeInMs), 'seamless release (black -> target)')
-      if (this._dryRun) {
-        this.d.log.info('        (DryRun: would fade to target)')
-        this.resetBridge('dry run')
-        return
-      }
-      await this.safeCall('SetCurrentPreviewScene', { sceneName: target })
-      await this.safeCall('TriggerStudioModeTransition')
-    })()
-    this.changed()
-  }
-
   // ---------------------------------------------------------- event handlers ----
   handleEvent(type: string, data: any) {
     switch (type) {
@@ -477,6 +327,8 @@ export class Controller {
         }
         return this.changed()
       case 'CurrentSceneTransitionChanged':
+        // the user may just have added our plugin's transition in OBS: look again
+        if (!this.pluginInstanceFound) void this.recheckPlugin()
         if (this.isOwnEcho('n:' + data.transitionName)) return this.d.log.debug(`Transition -> '${data.transitionName}' (our own prime)`)
         if (this.appliedTransitionName !== data.transitionName) {
           this.appliedTransitionName = data.transitionName
@@ -506,17 +358,6 @@ export class Controller {
   }
 
   private onPreviewSceneChanged(scene: string) {
-    if (['FadingToBlack', 'Holding', 'FadingIn'].includes(this.bridgeState)) {
-      if ((this.now() - this.bridgeSince) / 1000 > 30) this.resetBridge('watchdog: stuck > 30 s')
-      else {
-        this.d.log.debug(`Preview -> '${scene}' (ignored: seamless transition running)`)
-        return
-      }
-    }
-    if (this.bridgeState === 'Armed' && this.bridgeSceneName && normalizeSceneKey(scene) === normalizeSceneKey(this.bridgeSceneName)) {
-      this.d.log.debug('Preview -> black (seamless armed)')
-      return
-    }
     this.previewScene = scene
     this.d.log.debug(`Preview -> '${scene}'`)
     this.changed()
@@ -532,25 +373,12 @@ export class Controller {
         return
       }
     }
-    if (this.bridgeActive) {
-      const bd = decide(this.cfg, this.groupMap, this.programScene, scene)
-      if (bd.isCrossGroup) return this.startBridgeArm(bd)
-      if (this.bridgeState === 'Armed') this.resetBridge(`operator picked '${scene}' (same preset as program) - seamless cancelled`)
-    }
     this.primeForCurrentPair(`preview changed to '${scene}'`)
   }
 
   private onTransitionStarted(transitionName: string) {
     this.transitionInFlight = true
     this.transitionInFlightSince = this.now()
-
-    if (this.bridgeState === 'Armed') {
-      this.bridgeState = 'FadingToBlack'
-      this.bridgeSince = this.now()
-      this.d.log.info(`SEAMLESS fading to '${this.bridgeSceneName}' (${this.cfg.seamless.fadeToBlackMs} ms); the camera click for '${this.group(this.bridgeTarget)}' fires the moment black is reached.`)
-      this.changed()
-      return
-    }
 
     const dec = this.currentDecision()
     this.d.log.info(`TRANSITION STARTED '${transitionName}'  (${dec.origin} -> ${dec.target})`)
@@ -590,26 +418,6 @@ export class Controller {
     this.transitionInFlight = false
     this.d.log.debug(`TRANSITION ENDED '${transitionName}'`)
 
-    if (this.bridgeState === 'FadingToBlack') {
-      const tgt = this.bridgeTarget!
-      if (this.bridgeSceneName && normalizeSceneKey(this.programScene) !== normalizeSceneKey(this.bridgeSceneName)) {
-        this.resetBridge(`transition ended on '${this.programScene}', not on '${this.bridgeSceneName}'`)
-      } else {
-        const hold = this.cfg.seamless.holdMs
-        this.bridgeState = 'Holding'
-        this.bridgeSince = this.now()
-        this.d.log.info(`SEAMLESS BLACK reached - clicking the camera preset now, then holding ${hold} ms.`)
-        this.ptz.invoke(this.group(tgt), tgt, 'seamless: black reached')
-        this.bridgeTimer = setTimeout(() => this.processBridgeRelease(), hold)
-        this.changed()
-        return
-      }
-    }
-    if (this.bridgeState === 'FadingIn') {
-      this.d.log.info(`SEAMLESS complete - live on '${this.bridgeTarget}'.`)
-      this.resetBridge('complete')
-    }
-
     if (this.pendingCrossCheck) {
       // CurrentProgramSceneChanged never arrived during the transition: ask OBS what is live now.
       this.d.log.warn('        No confirmed program-scene change seen during transition - verifying directly.')
@@ -648,10 +456,6 @@ export class Controller {
     const old = this.programScene
     this.programScene = scene
     this.d.log.debug(`Program -> '${scene}'`)
-    if (this.bridgeState === 'FadingToBlack' && this.bridgeSceneName && normalizeSceneKey(scene) !== normalizeSceneKey(this.bridgeSceneName)) {
-      this.resetBridge(`program went to '${scene}' instead of black (changed by another tool?)`)
-    }
-
     if (normalizeSceneKey(old) !== normalizeSceneKey(scene)) {
       // QUICK-FIRE: immediate; deduped against the early fire by cameraGroup. Scenes with no preset still
       // run the tracking check (no preset click is ever sent for them).
@@ -682,6 +486,18 @@ export class Controller {
   }
 
   dispose() {
-    this.resetBridge('shutdown')
+    /* nothing to clean up: the controller owns no timers */
+  }
+
+  /** Ask OBS again whether our plugin is loaded and its transition exists (after the user installs it or adds the transition). */
+  async recheckPlugin() {
+    if (!this.ready) return
+    await this.resolveTransitionNames()
+    this.changed()
+  }
+
+  /** The transition the plugin's settings are applied to; null when OBS has no transition of our kind. */
+  get pluginTransitionName(): string | null {
+    return this.resolved.crossGroup.kind === PLUGIN_KIND ? this.resolved.crossGroup.name : null
   }
 }

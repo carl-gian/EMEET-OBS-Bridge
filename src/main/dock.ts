@@ -85,6 +85,8 @@ function handle(d: DockDeps, req: IncomingMessage, res: ServerResponse) {
       camera: { driver: s.camera.driver },
       dryRun: s.dryRun,
       update: s.update,
+      plugin: s.plugin,
+      seamless: cfg.transitions.crossGroupMode === 'seamless',
       preview: s.preview,
       previewIsLive: !!s.preview && key === normalizeSceneKey(s.program),
       previewPreset: lookup(cfg.scenes) ?? null,
@@ -162,6 +164,7 @@ const DOCK_HTML = `<!doctype html>
   <div class="badges">
     <span class="badge" id="obsB"><i></i><span id="obs">OBS ...</span></span>
     <span class="badge" id="camB"><i></i><span id="cam">EMEET ...</span></span>
+    <span class="badge" id="plg" hidden><i></i><span id="plgT"></span></span>
     <span class="badge accent" id="upd" hidden><i></i><span id="updT"></span></span>
     <span class="badge warn" id="dry" hidden><i></i>Dry run</span>
   </div>
@@ -210,6 +213,21 @@ const DOCK_HTML = `<!doctype html>
       badge('cam', d === 'ready' ? 'ok' : d === 'mock' ? '' : d === 'starting' ? 'warn' : 'bad',
         d === 'ready' ? 'EMEET detected' : d === 'mock' ? 'EMEET not checked' : d === 'starting' ? 'EMEET looking...' : 'EMEET not detected')
       $('dry').hidden = !s.dryRun
+      // OBS plugin badge (Seamless Mode). Same wording as the app's header badge.
+      const p = s.plugin || {}
+      const pb = {
+        ready: s.seamless && ['ok', 'OBS plugin ready'],
+        'not-installed': s.seamless && ['warn', 'OBS plugin not installed'],
+        'needs-transition': s.seamless && ['warn', 'Add plugin transition in OBS'],
+        'restart-obs': ['warn', 'Restart OBS to load plugin'],
+        'update-available': ['accent', 'Plugin update ' + p.latestVersion + ' (open the app)'],
+        'obs-newer': ['bad', 'OBS ' + p.obsVersion + ': plugin built for ' + p.builtForObs],
+        'obs-older': ['bad', 'Update OBS to ' + p.builtForObs],
+        'risk-accepted': ['warn', 'Plugin: own risk'],
+        'bridge-too-old': ['warn', 'Plugin needs newer Bridge']
+      }[p.status]
+      $('plg').hidden = !pb
+      if (pb) { $('plg').className = 'badge ' + pb[0]; $('plgT').textContent = pb[1] }
       const u = s.update || {}
       $('upd').hidden = !(u.status === 'ready' || u.status === 'downloading')
       $('updT').textContent = u.status === 'ready' ? 'Update ' + u.version + ' ready (open the app)' : 'Downloading update ' + u.percent + '%'

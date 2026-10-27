@@ -24,7 +24,7 @@ Safety rules (a bug here can take OBS down during a live meeting):
 #define S_HOLD_MS "hold_ms"
 #define S_PLUGIN_VERSION "plugin_version"
 
-#define DEFAULT_FADE_MS 500
+#define DEFAULT_FADE_MS 800
 #define DEFAULT_HOLD_MS 3500
 #define MAX_FADE_MS 10000
 #define MAX_HOLD_MS 60000
@@ -98,7 +98,11 @@ static void hold_update(void *data, obs_data_t *settings)
 	if (hold > MAX_HOLD_MS)
 		hold = MAX_HOLD_MS;
 
-	const float total = (float)(2 * fade + hold);
+	/* The transition's own length is fade + hold + fade: OBS's Duration box is greyed out for it and follows these settings. */
+	const long long total_ms = 2 * fade + hold;
+	obs_transition_enable_fixed(s->source, true, (uint32_t)(total_ms > 0 ? total_ms : 1));
+
+	const float total = (float)total_ms;
 	float p1 = 0.0f;
 	float p2 = 0.0f;
 	if (total > 0.0f) {

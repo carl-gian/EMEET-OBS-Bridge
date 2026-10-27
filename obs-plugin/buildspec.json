@@ -38,7 +38,7 @@
     },
     "name": "emeet-bridge-transition",
     "displayName": "EMEET-OBS Bridge Transition",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "obsVersion": "32.2.2",
     "author": "EMEET-OBS Bridge",
     "website": "https://github.com/carl-gian/EMEET-OBS-Bridge",

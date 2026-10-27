@@ -11,9 +11,11 @@ const state: any = {
   program: 'Table',
   preview: 'Podium ---- (talks)',
   camera: { group: 'Preset1', driver: 'ready' },
-  update: { status: 'ready', version: '1.0.2', percent: 100 }
+  update: { status: 'ready', version: '1.0.2', percent: 100 },
+  plugin: { status: 'ready', usable: true, installedVersion: '1.0.1', builtForObs: '32.2.2', latestVersion: '1.0.1', latestObs: '32.2.2', obsVersion: '32.2.2', busy: '', error: '', obsRunning: false }
 }
 const cfg: any = {
+  transitions: { crossGroupMode: 'seamless' },
   presetCount: 3,
   presets: { Preset1: { label: 'Stage' }, Preset2: { label: 'Reader' }, Preset3: { label: 'Table' }, Preset4: { label: 'Four' } },
   scenes: { 'Podium----(talks)': 'Preset1' },
@@ -42,6 +44,8 @@ describe('OBS dock server', () => {
     expect(s.presets.map((p: any) => p.id)).toEqual(['Preset1', 'Preset2', 'Preset3'])
     expect(s.camera.driver).toBe('ready')
     expect(s.update).toEqual({ status: 'ready', version: '1.0.2', percent: 100 })
+    expect(s.plugin.status).toBe('ready')
+    expect(s.seamless).toBe(true)
   })
   it('rejects POST without the dock header, accepts it with', async () => {
     expect((await fetch(`${base}/api/resync`, { method: 'POST' })).status).toBe(403)

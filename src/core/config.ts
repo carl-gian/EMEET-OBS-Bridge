@@ -45,14 +45,8 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   const raw: Obj = isObj(rawIn) ? stripComments(rawIn) : {}
   const cfg = def
 
-  for (const section of ['general', 'obs', 'transitions', 'seamless', 'ptz', 'emeet', 'behavior', 'logging'] as const) {
+  for (const section of ['general', 'obs', 'transitions', 'plugin', 'ptz', 'emeet', 'behavior', 'logging'] as const) {
     if (section in raw) (cfg as Obj)[section] = mergeKnown((def as Obj)[section], raw[section])
-  }
-
-  // Older builds called Seamless Mode "Black Bridge".
-  if (isObj(raw.blackBridge) && !isObj(raw.seamless)) {
-    if (typeof raw.blackBridge.sceneName === 'string') cfg.seamless.sceneName = raw.blackBridge.sceneName
-    if (Number.isFinite(Number(raw.blackBridge.holdMs))) cfg.seamless.holdMs = Number(raw.blackBridge.holdMs)
   }
 
   // Old layout: obs.uri = "ws://host:port"
@@ -71,7 +65,6 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
       const r = raw.transitions[k]
       if (isObj(r) && 'settings' in r) cfg.transitions[k].settings = isObj(r.settings) ? r.settings : null
     }
-    if (raw.transitions.crossGroupMode === 'blackBridge' || raw.transitions.crossGroupMode === 'seamless') cfg.transitions.crossGroupMode = 'seamless'
   }
 
   // Presets: always Preset1..Preset8. Anything the file doesn't define comes from the preloaded defaults.
@@ -131,7 +124,9 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   }
   // Version 3: EMEET Studio path has a default (older configs had it empty).
   if (fromVersion < 3 && !cfg.emeet.exePath) cfg.emeet.exePath = DEFAULT_EMEET_EXE
-  cfg.configVersion = 3
+  // Version 4: Seamless Mode is now the OBS plugin transition. The old holding-scene settings are gone; keep the picture if there was one.
+  if (fromVersion < 4 && isObj(raw.seamless) && typeof raw.seamless.cardImage === 'string' && !cfg.plugin.imagePath) cfg.plugin.imagePath = raw.seamless.cardImage
+  cfg.configVersion = 4
 
   if (isObj(raw.sceneTracking)) {
     const t: Record<string, boolean> = {}
@@ -155,15 +150,11 @@ export function normalizeConfig(rawIn: unknown): { config: AppConfig; warnings: 
   cfg.transitions.intraGroup.durationMs = nonNeg(cfg.transitions.intraGroup.durationMs, 1000)
   cfg.transitions.crossGroup.durationMs = nonNeg(cfg.transitions.crossGroup.durationMs, 1000)
   cfg.ptz.fireOffsetMs = nonNeg(cfg.ptz.fireOffsetMs, 200)
-  cfg.seamless.holdMs = nonNeg(cfg.seamless.holdMs, 3000)
-  cfg.seamless.fadeToBlackMs = nonNeg(cfg.seamless.fadeToBlackMs, 800)
-  cfg.seamless.fadeInMs = nonNeg(cfg.seamless.fadeInMs, 800)
+  cfg.plugin.fadeMs = Math.min(10000, nonNeg(cfg.plugin.fadeMs, 800))
+  cfg.plugin.holdMs = Math.min(60000, nonNeg(cfg.plugin.holdMs, 3500))
+  if (typeof cfg.plugin.imagePath !== 'string') cfg.plugin.imagePath = ''
+  if (typeof cfg.plugin.riskAcceptedObs !== 'string') cfg.plugin.riskAcceptedObs = ''
   if (!['Debug', 'Info', 'Warn', 'Error'].includes(cfg.logging.level)) cfg.logging.level = 'Debug'
-  // Seamless Mode was taken out in 1.0.4 (a better plugin-based mode is planned). Anyone who had it goes back to Fast Mode.
-  if (cfg.transitions.crossGroupMode === 'seamless') {
-    cfg.transitions.crossGroupMode = 'fast'
-    warnings.push('Seamless Mode was removed in 1.0.4 - switched to Fast Mode (Settings > Transition Rules).')
-  }
   if (!['fast', 'seamless'].includes(cfg.transitions.crossGroupMode)) cfg.transitions.crossGroupMode = 'fast'
   if (!['screen', 'client'].includes(cfg.emeet.coordSpace)) cfg.emeet.coordSpace = 'screen'
 

@@ -68,20 +68,26 @@ describe('config migration', () => {
     expect(config.presets.Preset8.x).toBe(1222)
     expect(config.presets.Preset1.x).toBe(1)
   })
-  it('old 200 ms offset becomes 0 once; Seamless / Black Bridge settings fall back to Fast Mode; unknown options vanish', () => {
+  it('old 200 ms offset becomes 0 once; unknown options vanish; the old holding-card picture moves to the plugin settings', () => {
     const { config, warnings } = normalizeConfig({
       ptz: { fireOffsetMs: 200 },
-      transitions: { crossGroupMode: 'blackBridge' },
-      blackBridge: { sceneName: 'BLK', holdMs: 2500 },
+      transitions: { crossGroupMode: 'seamless' },
+      seamless: { cardImage: 'C:\\data\\old-card.png', holdMs: 2500 },
       general: { someRemovedOption: true, obsPath: 'C:\\obs.exe' }
     })
     expect(config.ptz.fireOffsetMs).toBe(0)
     expect(warnings.some((w) => /200 ms to 0 ms/.test(w))).toBe(true)
-    expect(config.transitions.crossGroupMode).toBe('fast') // Seamless Mode was removed in 1.0.4
-    expect(warnings.some((w) => /Seamless Mode was removed/.test(w))).toBe(true)
-    expect(config.seamless).toMatchObject({ sceneName: 'BLK', holdMs: 2500, fadeToBlackMs: 800, fadeInMs: 800 })
+    expect(config.transitions.crossGroupMode).toBe('seamless') // Seamless Mode is back (the OBS plugin)
+    expect(config.plugin).toMatchObject({ imagePath: 'C:\\data\\old-card.png', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' })
+    expect((config as any).seamless).toBeUndefined()
     expect((config.general as any).someRemovedOption).toBeUndefined()
     expect(normalizeConfig({ configVersion: 2, ptz: { fireOffsetMs: 200 } }).config.ptz.fireOffsetMs).toBe(200)
+  })
+  it('plugin fade/hold are clamped to sane values', () => {
+    const { config } = normalizeConfig({ plugin: { fadeMs: -5, holdMs: 999999, imagePath: 5 } })
+    expect(config.plugin.fadeMs).toBe(800)
+    expect(config.plugin.holdMs).toBe(60000)
+    expect(config.plugin.imagePath).toBe('')
   })
   it('EMEET Studio path defaults in, and the launch/start-up switches are OFF by default', () => {
     const d = defaultConfig()

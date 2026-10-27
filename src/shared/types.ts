@@ -64,13 +64,12 @@ export interface AppConfig {
     intraGroup: TransitionCfg
     crossGroup: TransitionCfg
   }
-  seamless: {
-    sceneName: string
-    fadeToBlackMs: number
-    holdMs: number
-    fadeInMs: number
-    /** Full path of the uploaded holding-card picture (a copy kept in the app's data folder). Empty = plain black. */
-    cardImage: string
+  /** Seamless Mode: our OBS plugin fades to this picture, holds it, then fades to the next scene. */
+  plugin: {
+    imagePath: string // copy kept in the app's data folder; '' = plain black
+    fadeMs: number // each of the two fades (default 800)
+    holdMs: number // how long the picture stays (default 3500)
+    riskAcceptedObs: string // OBS version the user chose to carry on with although the plugin was built for another ('' = none)
   }
   ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean } // fireOffsetMs: 0 = click as soon as OBS reports the transition started
   tracking: {
@@ -132,6 +131,32 @@ export interface UpdateInfo {
   percent: number // download progress 0-100
 }
 
+export type PluginStatusName =
+  | 'unknown'
+  | 'not-installed'
+  | 'needs-transition'
+  | 'restart-obs'
+  | 'ready'
+  | 'update-available'
+  | 'obs-newer'
+  | 'obs-older'
+  | 'risk-accepted'
+  | 'bridge-too-old'
+
+/** Everything the UI needs to show about the OBS plugin. */
+export interface PluginInfo {
+  status: PluginStatusName
+  usable: boolean
+  installedVersion: string // '' = not installed
+  builtForObs: string // OBS version the installed plugin was built for
+  latestVersion: string // newest plugin on GitHub ('' = not checked / unreachable)
+  latestObs: string // OBS version that newest plugin is built for
+  obsVersion: string // OBS version running now
+  busy: '' | 'checking' | 'installing'
+  error: string
+  obsRunning: boolean
+}
+
 export interface AppState {
   version: string
   platform: string
@@ -152,7 +177,7 @@ export interface AppState {
     hwnd?: string
   }
   dryRun: boolean
-  bridgeState: string
+  plugin: PluginInfo
   update: UpdateInfo
 }
 
@@ -190,6 +215,11 @@ export const IPC = {
   sendDiagnostics: 'app:send-diagnostics',
   browseFile: 'app:browse-file',
   clearLogsView: 'log:clear',
+  openSettings: 'ui:open-settings',
+  pluginCheck: 'plugin:check',
+  pluginInstall: 'plugin:install',
+  pluginRisk: 'plugin:risk',
+  openObs: 'plugin:open-obs',
   getLaunchInfo: 'app:launch-info',
   ackLaunchInfo: 'app:launch-ack',
   openHelp: 'ui:open-help',

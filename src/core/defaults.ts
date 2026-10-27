@@ -6,7 +6,7 @@ export const DEFAULT_EMEET_EXE = 'C:\\Program Files\\EMEET STUDIO\\bin\\64bit\\E
 /** Shipped defaults. These mirror the owner's proven PowerShell config (the OBS password is NOT included). */
 export function defaultConfig(): AppConfig {
   return {
-    configVersion: 3,
+    configVersion: 4,
     general: { obsPath: '', launchObsOnStart: false, startHidden: true, startWithWindows: false },
     obs: {
       host: 'localhost',
@@ -39,7 +39,7 @@ export function defaultConfig(): AppConfig {
         settings: { color: 4278190080, switch_point: 50 }
       }
     },
-    seamless: { sceneName: 'BLACK SCREEN', fadeToBlackMs: 800, holdMs: 3000, fadeInMs: 800, cardImage: '' },
+    plugin: { imagePath: '', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' },
     ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false },
     tracking: {
       enabled: false,

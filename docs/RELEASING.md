@@ -17,3 +17,14 @@ Notes
 - The repo must be **public** (or releases hosted elsewhere) or installed apps cannot download updates.
 - Unsigned builds work but Windows SmartScreen may warn; code signing is a separate decision.
 - The first build with this feature (0.2.1+) must be installed by hand; later versions update themselves.
+
+## Releasing the OBS plugin (separate from the app)
+
+The plugin lives in `obs-plugin/` and has its own releases. The app reads the newest `plugin-*` release's `plugin-manifest.json`.
+
+1. Change `"version"` (and, for a new OBS, `"obsVersion"` and the pinned dependencies) in `obs-plugin/buildspec.json`.
+2. Commit and push to `main`. The *Build OBS plugin* workflow builds a test zip (Actions > the run > Artifacts). Test it on the rig first.
+3. Tag and push: `git tag plugin-1.0.1` then `git push origin plugin-1.0.1`. The tag **must** equal `plugin-` plus the version in `buildspec.json`, and must **never** start with `v` (that would start an app release).
+4. The workflow publishes a **pre-release** with the zip and `plugin-manifest.json`. Installed apps pick it up within 6 hours (or on *Check again*).
+
+Rules: one plugin per OBS version, built for the latest stable OBS only. When a new stable OBS ships, build a new plugin for it and move forward; never patch an older OBS's plugin.

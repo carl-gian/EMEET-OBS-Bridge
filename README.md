@@ -77,7 +77,7 @@ and prepares the next one when the transition ends.
 |---|---|
 | **Same preset group** (e.g. Close Up to Full Stage) | Plain **Fade**, 1000 ms. The camera is not touched. |
 | **Different preset group**, *Fast Mode (Fade to Black)* | **Fade to Black** (configurable duration and switch point), 1000 ms by default. The EMEET preset is clicked as soon as the transition starts (configurable delay, default 0 ms), so the camera moves while the screen dips to black. For a slow camera, a longer fade with a later switch point (for example 2800 ms and 80 %) keeps the old scene dimming until the camera has settled. |
-| **Different preset group**, *Seamless Mode* | **Work in progress.** A mode that fades to a picture of your choice, holds it while the camera moves, then fades to the next scene, planned as an OBS plugin installed and managed by this app. It was removed from the app in 1.0.4 until the plugin is ready. |
+| **Different preset group**, *Seamless Mode (OBS plugin)* | A plugin for OBS adds one transition: scene A fades (800 ms) to a picture of your choice, holds it (3500 ms) while the camera moves, then fades (800 ms) to the next scene. The operator picks the scene in Preview and presses Transition as usual; Preview is never swapped. The camera preset is clicked when the first fade ends. The Bridge installs and updates the plugin; if the plugin is not usable (not installed, or OBS was updated to a version it was not built for) Fast Mode is used and a badge says why. |
 | **Another program** switches the OBS Program scene directly (e.g. Meeting Media Manager), without using Preview | The app clicks the right preset as soon as OBS reports the new Program scene ("quick fire"). OBS reports this up to about 1 s into a 1000 ms fade; that is an OBS limit. |
 | The early guess was wrong (Preview was stale) | The app corrects it immediately with the right preset. |
 | Camera is already on that preset | Nothing happens. |
@@ -136,7 +136,7 @@ Open the main window and press **Settings**.
 |---|---|
 | **General** | EMEET Studio path and "open EMEET Studio when this app starts" (off by default); OBS path; open OBS at app start; start this app when Windows starts (off by default); hide in the tray at app start; log detail (Debug/Info/Warn/Error); Dry run. |
 | **OBS** | Server address, port, password (stored only on this PC), connect/request timeouts, and the name/URL to paste into OBS for the dock. |
-| **Transition Rules** | Same-preset transition; **Transition Modes** (**Fast - Fade to Black** with duration, click delay and switch point); behaviour switches (clear per-scene overrides on connect, prepare next transition after one ends, click the live scene's preset when connecting). |
+| **Transition Rules** | Same-preset transition; **Transition Modes** (**Fast - Fade to Black** with duration, click delay and switch point, or **Seamless - hold on a picture** with the picture, fade and hold times, and the OBS plugin installer); behaviour switches (clear per-scene overrides on connect, prepare next transition after one ends, click the live scene's preset when connecting). |
 | **Camera** | Preset button positions (screen pixels), preset count, tracking buttons, EMEET window position and size, keep EMEET behind other windows, and the master "Camera automation on" switch. |
 
 Where the config file lives: `%APPDATA%\OBS Master Controller\config.json`. Logs are in the `logs` folder beside it (Open logs).
@@ -182,6 +182,15 @@ The app clicks the EMEET preset buttons by **screen position**, and moves the EM
 Press **Open logs** or use the tray menu to open the log folder; **Send diagnostics** in Settings > General > Support creates a zip to share.
 
 ---
+
+## OBS plugin (Seamless Mode)
+
+Seamless Mode needs a small plugin for OBS Studio, built in `obs-plugin/` and released separately from the app (GitHub tags `plugin-<version>`).
+
+- **Install:** Settings > Transition Rules > Seamless Mode > *Install OBS plugin* (close OBS first; Windows may ask for permission once). Then start OBS and add the transition once: Scene Transitions panel, **+**, *EMEET Bridge (fade, hold on picture, fade)*.
+- **Version rules:** a plugin is built for exactly **one** OBS version, the latest stable (today **32.2.2**). When a new stable OBS is released we build a plugin for it and move forward; we never patch the plugin of an older OBS.
+- **If OBS changes version:** the app notices. If OBS is newer than the plugin was built for, Seamless Mode switches itself off (Fast Mode is used), the badge turns red and the app asks you to go back to the matching OBS version until a plugin update is released, or to carry on at your own risk (remembered for that OBS version only). If OBS is older, it asks you to update OBS.
+- **Updates:** the app checks GitHub for a newer plugin and shows a badge and a notification; installing it is one click. A plugin update does not need a new app version, and an app update does not need a new plugin.
 
 ## Updates
 

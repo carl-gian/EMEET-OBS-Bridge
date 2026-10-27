@@ -20,6 +20,10 @@ const api: Api = {
   chooseHoldingCard: () => ipcRenderer.invoke(IPC.chooseHoldingCard),
   removeHoldingCard: () => ipcRenderer.invoke(IPC.removeHoldingCard),
   holdingCardPreview: () => ipcRenderer.invoke(IPC.holdingCardPreview),
+  pluginCheck: () => ipcRenderer.invoke(IPC.pluginCheck),
+  pluginInstall: () => ipcRenderer.invoke(IPC.pluginInstall),
+  pluginRisk: (accept) => ipcRenderer.invoke(IPC.pluginRisk, accept),
+  openObs: () => ipcRenderer.invoke(IPC.openObs),
   installUpdate: () => ipcRenderer.invoke(IPC.installUpdate),
   checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
   browseFile: (title, extensions) => ipcRenderer.invoke(IPC.browseFile, title, extensions),
@@ -30,6 +34,11 @@ const api: Api = {
     const h = (_: unknown, t: string) => cb(t)
     ipcRenderer.on(IPC.openHelp, h)
     return () => ipcRenderer.removeListener(IPC.openHelp, h)
+  },
+  onOpenSettings: (cb) => {
+    const h = (_: unknown, t: string) => cb(t)
+    ipcRenderer.on(IPC.openSettings, h)
+    return () => ipcRenderer.removeListener(IPC.openSettings, h)
   },
   onState: (cb) => {
     const h = (_: unknown, s: any) => cb(s)

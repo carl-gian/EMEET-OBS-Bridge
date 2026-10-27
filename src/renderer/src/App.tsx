@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { AppConfig, AppState, LogEntry } from '@shared/types'
+import type { AppConfig, AppState, LogEntry, PluginInfo } from '@shared/types'
+import type { SettingsTab } from './components/SettingsModal'
 import type { LaunchInfo } from '@shared/changelog'
 import SceneManager from './components/SceneManager'
 import ConsoleLog from './components/ConsoleLog'
@@ -8,11 +9,33 @@ import HelpGuide from './components/HelpGuide'
 import Tutorial from './components/Tutorial'
 import { Button, HelpTip, Pill } from './components/ui'
 
-const SEAMLESS_LABEL: Record<string, string> = {
-  Armed: 'armed - press Transition',
-  FadingToBlack: 'fading to black',
-  Holding: 'holding on black',
-  FadingIn: 'fading to target'
+type BadgeTone = 'ok' | 'warn' | 'bad' | 'accent'
+const BADGE_CLASS: Record<BadgeTone, string> = { ok: 'bg-ok/15 text-ok', warn: 'bg-warn/15 text-warn', bad: 'bg-bad/15 text-bad', accent: 'bg-accent/20 text-accent' }
+
+/** What the OBS plugin badge says (null = nothing worth showing). Seamless users see more than Fast Mode users. */
+function pluginBadge(p: PluginInfo, seamless: boolean): { tone: BadgeTone; text: string } | null {
+  switch (p.status) {
+    case 'ready':
+      return seamless ? { tone: 'ok', text: 'OBS plugin ready' } : null
+    case 'not-installed':
+      return seamless ? { tone: 'warn', text: 'OBS plugin not installed' } : null
+    case 'needs-transition':
+      return seamless ? { tone: 'warn', text: 'Add the plugin transition in OBS' } : null
+    case 'restart-obs':
+      return { tone: 'warn', text: 'Restart OBS to load the plugin' }
+    case 'update-available':
+      return { tone: 'accent', text: `Plugin update ${p.latestVersion} available` }
+    case 'obs-newer':
+      return { tone: 'bad', text: `OBS ${p.obsVersion}: plugin built for ${p.builtForObs}` }
+    case 'obs-older':
+      return { tone: 'bad', text: `Update OBS to ${p.builtForObs} (plugin)` }
+    case 'risk-accepted':
+      return { tone: 'warn', text: `Plugin: own risk (OBS ${p.obsVersion})` }
+    case 'bridge-too-old':
+      return { tone: 'warn', text: 'Plugin needs a newer Bridge' }
+    default:
+      return null
+  }
 }
 
 function CameraIcon() {
@@ -29,6 +52,11 @@ export default function App() {
   const [cfg, setCfg] = useState<AppConfig | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
+  const openSettings = (tab: SettingsTab = 'general') => {
+    setSettingsTab(tab)
+    setSettingsOpen(true)
+  }
   const [consoleOpen, setConsoleOpen] = useState(false) // hidden at every start
   const [helpTopic, setHelpTopic] = useState<string | null>(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
@@ -48,7 +76,8 @@ export default function App() {
       if (l.kind === 'first-run') setHelpTopic('start')
       else if (l.kind === 'updated') setHelpTopic('whatsnew')
     })
-    return window.api.onOpenHelp((t) => setHelpTopic(t || 'start'))
+    const offs = [window.api.onOpenHelp((t) => setHelpTopic(t || 'start')), window.api.onOpenSettings((t) => openSettings((t as SettingsTab) || 'general'))]
+    return () => offs.forEach((f) => f())
   }, [])
   useEffect(() => {
     const f1 = (e: KeyboardEvent) => {
@@ -139,9 +168,19 @@ export default function App() {
             Downloading update {state.update.version} ... {state.update.percent}%
           </Pill>
         )}
-        {state.bridgeState !== 'Idle' && (
-          <div className="text-xs text-warn">Seamless: {SEAMLESS_LABEL[state.bridgeState] ?? state.bridgeState}</div>
-        )}
+        {(() => {
+          const b = pluginBadge(state.plugin, cfg.transitions.crossGroupMode === 'seamless')
+          return b ? (
+            <button
+              onClick={() => openSettings('transitions')}
+              title="OBS plugin for Seamless Mode - click to open its settings"
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium hover:brightness-125 ${BADGE_CLASS[b.tone]}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {b.text}
+            </button>
+          ) : null
+        })()}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={resync}
@@ -157,7 +196,7 @@ export default function App() {
           <Button kind="ghost" onClick={() => setConsoleOpen((o) => !o)} title="Show or hide the live log of what the app is doing">
             {consoleOpen ? 'Hide console' : 'Open console'}
           </Button>
-          <Button onClick={() => setSettingsOpen(true)}>Settings</Button>
+          <Button onClick={() => openSettings()}>Settings</Button>
           <HelpTip title="Settings" align="right">
             OBS connection, transitions, EMEET preset positions (and how to add more presets), tracking buttons and start-up options.
           </HelpTip>
@@ -206,7 +245,7 @@ export default function App() {
       {toast && <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-line bg-panel2 px-4 py-2 text-sm shadow-lg">{toast}</div>}
       {helpTopic && <HelpGuide key={helpTopic} initial={helpTopic} entries={launch?.kind === 'updated' ? launch.entries : undefined} onClose={closeHelp} />}
       {tutorialOpen && <Tutorial onClose={() => setTutorialOpen(false)} />}
-      {settingsOpen && <SettingsModal onHelp={openHelp} cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
+      {settingsOpen && <SettingsModal onHelp={openHelp} plugin={state.plugin} initialTab={settingsTab} cfg={cfg} dryRun={state.dryRun} onClose={() => setSettingsOpen(false)} onSaved={setCfg} />}
     </div>
   )
 }

@@ -10,7 +10,7 @@ const READER = 'READER SETUP---------- (Watchtower & CBS)'
 const TABLE = 'TABLE ----------- (For Standing)'
 const BLACK = 'BLACK SCREEN'
 
-function setup(mutate?: (c: AppConfig) => void, sceneNames: string[] = [FULL, CLOSE, READER, TABLE, BLACK]) {
+function setup(mutate?: (c: AppConfig) => void) {
   const cfg = defaultConfig()
   mutate?.(cfg)
   const sent: PtzCommand[] = []
@@ -18,25 +18,16 @@ function setup(mutate?: (c: AppConfig) => void, sceneNames: string[] = [FULL, CL
   const batches: any[][] = []
   const logs: string[] = []
   let program = FULL
-  const scenesNow = [...sceneNames]
-  const flags = { failCreate: false }
-  const holdItems: string[] = [] // sources inside the Seamless holding scene (fake OBS state)
+  const flags = { plugin: true, pluginUsable: false }
   const obs: ObsLink = {
     async call(type, data) {
       calls.push({ type, data })
       switch (type) {
         case 'GetVersion': return { obsVersion: '32', obsWebSocketVersion: '5.7.4' }
         case 'GetStudioModeEnabled': return { studioModeEnabled: true }
-        case 'GetSceneList': return { scenes: scenesNow.map((n, i) => ({ sceneName: n, sceneIndex: i })) }
-        case 'GetVideoSettings': return { baseWidth: 1920, baseHeight: 1080 }
-        case 'CreateScene':
-          if (flags.failCreate) throw new Error('cannot create')
-          scenesNow.push(String(data?.sceneName))
-          return { sceneUuid: 'u' }
-        case 'CreateInput': holdItems.push(String(data?.inputName)); return { sceneItemId: holdItems.length }
-        case 'GetSceneItemList': return { sceneItems: holdItems.map((n) => ({ sourceName: n })) }
-        case 'RemoveInput': holdItems.splice(holdItems.indexOf(String(data?.inputName)), 1); return {}
-        case 'GetSceneTransitionList': return { transitions: [{ transitionName: 'Fade', transitionKind: 'fade_transition' }, { transitionName: 'Fade to Black', transitionKind: 'fade_to_color_transition' }] }
+        case 'GetSceneList': return { scenes: [FULL, CLOSE, READER, TABLE].map((n, i) => ({ sceneName: n, sceneIndex: i })) }
+        case 'GetTransitionKindList': return { transitionKinds: ['cut_transition', 'fade_transition', ...(flags.plugin ? ['emeet_bridge_hold_transition'] : [])] }
+        case 'GetSceneTransitionList': return { transitions: [{ transitionName: 'Fade', transitionKind: 'fade_transition' }, { transitionName: 'Fade to Black', transitionKind: 'fade_to_color_transition' }, ...(flags.plugin ? [{ transitionName: 'My Seamless', transitionKind: 'emeet_bridge_hold_transition' }] : [])] }
         case 'GetCurrentSceneTransition': return { transitionName: 'Fade', transitionKind: 'fade_transition', transitionDuration: 1000 }
         case 'GetSceneSceneTransitionOverride': return {}
         case 'GetCurrentProgramScene': return { currentProgramSceneName: program }
@@ -47,8 +38,8 @@ function setup(mutate?: (c: AppConfig) => void, sceneNames: string[] = [FULL, CL
     async batch(reqs) { batches.push(reqs); return reqs.map((r) => ({ requestType: r.requestType, requestStatus: { result: true, code: 100 } })) }
   }
   const log = { debug: (m: string) => logs.push(m), info: (m: string) => logs.push(m), warn: (m: string) => logs.push(m), error: (m: string) => logs.push(m) }
-  const c = new Controller({ obs, ptzSink: { send: (cmd) => sent.push(cmd) }, ptzLog: log, log, getConfig: () => cfg })
-  return { c, cfg, sent, calls, batches, logs, holdItems, flags, setProgram: (s: string) => (program = s) }
+  const c = new Controller({ obs, ptzSink: { send: (cmd) => sent.push(cmd) }, ptzLog: log, log, getConfig: () => cfg, getPluginUsable: () => flags.pluginUsable })
+  return { c, cfg, sent, calls, batches, logs, flags, setProgram: (s: string) => (program = s) }
 }
 
 const flush = () => vi.advanceTimersByTimeAsync(0)
@@ -204,118 +195,66 @@ describe('Tracking', () => {
   })
 })
 
-describe('Controller - Seamless Mode', () => {
+describe('Controller - Seamless Mode (OBS plugin)', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
   const seamless = (c: AppConfig) => {
     c.transitions.crossGroupMode = 'seamless'
+    c.plugin = { imagePath: 'C:\\data\\card.png', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' }
   }
 
-  it('remembers the target, fades to black (800), clicks when black is reached, holds 3 s, fades to the target (800)', async () => {
+  it('selects the plugin transition with the picture and times, sets no duration, and clicks the camera at the end of the first fade', async () => {
     const t = setup(seamless)
+    t.flags.pluginUsable = true
     await t.c.initSession()
     await flush()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
-    expect(t.c.bridgeState).toBe('Armed')
     await flush()
-    expect(t.calls.some((c) => c.type === 'SetCurrentPreviewScene' && c.data.sceneName === BLACK)).toBe(true)
-    const toBlack = t.batches.at(-1)!
-    expect(toBlack[0].requestData.transitionName).toBe('Fade')
-    expect(toBlack[1].requestData.transitionDuration).toBe(800)
+    const prime = t.batches.at(-1)!
+    expect(prime[0].requestData.transitionName).toBe('My Seamless')
+    expect(prime.some((r) => r.requestType === 'SetCurrentSceneTransitionDuration')).toBe(false)
+    expect(prime.find((r) => r.requestType === 'SetCurrentSceneTransitionSettings')!.requestData.transitionSettings).toEqual({ image_path: 'C:\\data\\card.png', fade_ms: 800, hold_ms: 3500 })
+    expect(t.c.pluginKindLoaded).toBe(true)
+    expect(t.c.pluginInstanceFound).toBe(true)
 
-    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade' })
-    expect(t.c.bridgeState).toBe('FadingToBlack')
-    expect(t.sent).toHaveLength(0) // no click yet - black not reached
-
-    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: BLACK })
-    t.c.handleEvent('SceneTransitionEnded', { transitionName: 'Fade' })
-    expect(t.c.bridgeState).toBe('Holding')
-    expect(t.sent).toHaveLength(1) // click right after the fade to black
+    const t0 = Date.now()
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'My Seamless' })
+    expect(t.sent).toHaveLength(1)
     expect(t.sent[0].presetId).toBe('Preset2')
-    expect(t.sent[0].fireAt).toBeUndefined()
-
-    await vi.advanceTimersByTimeAsync(2999)
-    expect(t.c.bridgeState).toBe('Holding')
-    await vi.advanceTimersByTimeAsync(1)
-    expect(t.c.bridgeState).toBe('FadingIn')
-    expect(t.batches.at(-1)![1].requestData.transitionDuration).toBe(800)
-    expect(t.calls.some((c) => c.type === 'TriggerStudioModeTransition')).toBe(true)
-
-    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
-    t.c.handleEvent('SceneTransitionEnded', { transitionName: 'Fade' })
-    await flush()
-    expect(t.c.bridgeState).toBe('Idle')
-    expect(t.sent).toHaveLength(1) // no second click
+    expect(t.sent[0].fireAt! - t0).toBe(800)
   })
 
-  it('another program switching the scene while armed cancels seamless (no stray click from it)', async () => {
+  it('never touches OBS Preview or adds scenes (the operator keeps full control of what transitions)', async () => {
     const t = setup(seamless)
-    await t.c.initSession()
-    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
-    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade' })
-    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: TABLE }) // not black
-    expect(t.c.bridgeState).toBe('Idle')
-    expect(t.sent.map((s) => s.presetId)).toEqual(['Preset3']) // only the quick-fire for the real scene
-  })
-
-  it('falls back to Fast Mode when the black scene is missing and cannot be created', async () => {
-    const t = setup((c) => {
-      seamless(c)
-      c.seamless.sceneName = 'NOPE'
-    }, [FULL, CLOSE, READER, TABLE])
-    t.flags.failCreate = true
+    t.flags.pluginUsable = true
     await t.c.initSession()
     await flush()
     t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
-    expect(t.c.bridgeState).toBe('Idle')
+    await flush()
+    expect(t.calls.some((c) => c.type === 'SetCurrentPreviewScene' || c.type === 'CreateScene' || c.type === 'CreateInput')).toBe(false)
   })
-})
 
-describe('Controller - Seamless holding scene', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
-  const seamless = (c: AppConfig) => {
-    c.transitions.crossGroupMode = 'seamless'
-  }
-  it('creates the holding scene with a black source when OBS does not have it', async () => {
-    const t = setup(seamless, [FULL, CLOSE, READER, TABLE])
+  it('falls back to Fast Mode while the plugin is not usable', async () => {
+    const t = setup(seamless)
+    t.flags.pluginUsable = false
     await t.c.initSession()
     await flush()
-    expect(t.calls.filter((c) => c.type === 'CreateScene').map((c) => c.data.sceneName)).toEqual([BLACK])
-    const black = t.calls.find((c) => c.type === 'CreateInput' && c.data.inputKind === 'color_source_v3')!
-    expect(black.data).toMatchObject({ sceneName: BLACK, inputSettings: { color: 4278190080, width: 1920, height: 1080 } })
-    expect(t.calls.some((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')).toBe(false)
-    expect(t.c.obsScenes).toContain(BLACK)
-    expect(t.logs.some((l) => /Seamless Mode ACTIVE/.test(l))).toBe(true)
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    await flush()
+    expect(t.batches.at(-1)![0].requestData.transitionName).toBe('Fade to Black')
+    expect(t.logs.some((l) => /Seamless Mode is selected but the OBS plugin is not ready/.test(l))).toBe(true)
   })
-  it('adds the holding card picture scaled to the canvas, and removes it again', async () => {
-    const t = setup((c) => {
-      seamless(c)
-      c.seamless.cardImage = 'C:\\data\\holding-card.png'
-    })
+
+  it('reports whether OBS has the plugin loaded and the transition added', async () => {
+    const t = setup(seamless)
+    t.flags.plugin = false
     await t.c.initSession()
-    await flush()
-    const img = t.calls.find((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')!
-    expect(img.data.inputSettings).toEqual({ file: 'C:\\data\\holding-card.png' })
-    const fit = t.calls.find((c) => c.type === 'SetSceneItemTransform')!
-    expect(fit.data.sceneItemTransform).toMatchObject({ boundsType: 'OBS_BOUNDS_SCALE_INNER', boundsWidth: 1920, boundsHeight: 1080, positionX: 960, positionY: 540 })
-    expect(t.holdItems).toContain('EMEET Bridge - holding card')
-    // a different picture later only updates the existing source
-    t.cfg.seamless.cardImage = 'C:\\data\\holding-card-2.png'
-    t.c.onConfigChanged()
-    await flush()
-    expect(t.calls.filter((c) => c.type === 'CreateInput' && c.data.inputKind === 'image_source')).toHaveLength(1)
-    expect(t.calls.some((c) => c.type === 'SetInputSettings' && c.data.inputSettings.file.endsWith('holding-card-2.png'))).toBe(true)
-    // removing the picture removes our source
-    t.cfg.seamless.cardImage = ''
-    t.c.onConfigChanged()
-    await flush()
-    expect(t.calls.some((c) => c.type === 'RemoveInput' && c.data.inputName === 'EMEET Bridge - holding card')).toBe(true)
-  })
-  it('Fast Mode never touches OBS scenes', async () => {
-    const t = setup(undefined, [FULL, CLOSE, READER, TABLE])
-    await t.c.initSession()
-    await flush()
-    expect(t.calls.some((c) => c.type === 'CreateScene' || c.type === 'CreateInput')).toBe(false)
+    expect(t.c.pluginKindLoaded).toBe(false)
+    expect(t.c.pluginInstanceFound).toBe(false)
+    t.flags.plugin = true
+    await t.c.recheckPlugin()
+    expect(t.c.pluginKindLoaded).toBe(true)
+    expect(t.c.pluginInstanceFound).toBe(true)
+    expect(t.c.pluginTransitionName).toBeNull() // only set once it is the resolved cross-group transition
   })
 })

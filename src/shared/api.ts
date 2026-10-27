@@ -20,6 +20,10 @@ export interface Api {
   chooseHoldingCard(): Promise<HoldingCardResult>
   removeHoldingCard(): Promise<HoldingCardResult>
   holdingCardPreview(): Promise<string | null>
+  pluginCheck(): Promise<void>
+  pluginInstall(): Promise<void>
+  pluginRisk(accept: boolean): Promise<void>
+  openObs(): Promise<void>
   installUpdate(): Promise<void>
   checkUpdate(): Promise<void>
   browseFile(title: string, extensions: string[]): Promise<string | null>
@@ -27,6 +31,7 @@ export interface Api {
   getLaunchInfo(): Promise<LaunchInfo>
   ackLaunchInfo(): Promise<void>
   onOpenHelp(cb: (topic: string) => void): () => void
+  onOpenSettings(cb: (tab: string) => void): () => void
   onState(cb: (s: AppState) => void): () => void
   onLog(cb: (e: LogEntry) => void): () => void
   onConfig(cb: (c: AppConfig) => void): () => void

@@ -158,10 +158,32 @@ const TOPICS = (entries: ChangelogEntry[]): Topic[] => [
         <ul className="mb-3 list-disc space-y-1.5 pl-5 text-[13px]">
           <li><b>Same group:</b> a plain 1 s Fade. The camera is not touched.</li>
           <li><b>Different group, Fast Mode:</b> Fade to Black, and the EMEET preset is clicked as the transition starts.</li>
+          <li><b>Different group, Seamless Mode:</b> fade to your picture, hold it while the camera moves, then fade to the scene (uses the OBS plugin).</li>
           <li><b>Another program changes the scene:</b> the camera is clicked as soon as OBS reports it.</li>
           <li><b>Press Transition when Program and Preview are the same scene:</b> re-clicks that scene's preset (a manual resync).</li>
         </ul>
         <P>The camera is never clicked twice for the same preset in a row.</P>
+      </>
+    )
+  },
+  {
+    id: 'seamless',
+    title: 'Seamless Mode (OBS plugin)',
+    body: (
+      <>
+        <P>
+          Seamless Mode hides the camera movement behind a picture. You press Transition as usual: the screen fades to your picture, holds it while the camera moves, then fades to the next scene. OBS Preview is
+          never touched. It uses a small plugin for OBS that this app installs for you.
+        </P>
+        <H>Set up (once)</H>
+        <ol className="mb-3 list-decimal space-y-1 pl-5 text-[13px]">
+          <li>Settings &gt; Transition Rules: choose <b>Seamless Mode - hold on a picture</b>, then Save.</li>
+          <li>Press <b>Install OBS plugin</b>. Close OBS first. Windows may ask for permission once.</li>
+          <li>Start OBS. In its Scene Transitions panel click <b>+</b> and choose <b>EMEET Bridge (fade, hold on picture, fade)</b>. Leave its settings alone: they come from this app.</li>
+          <li>Back here: choose your picture and the times (fade 800 ms, hold 3500 ms by default), then Save.</li>
+        </ol>
+        <H>The badge</H>
+        <P>The badge at the top shows the plugin's state. If OBS is updated to a version the plugin was not built for, Seamless Mode switches itself off (Fast Mode is used) and the badge turns red. Go back to the OBS version it names until a plugin update is released, or choose "Use anyway (my own risk)". When an update for the plugin is available, the badge says so and you install it with one click.</P>
       </>
     )
   },

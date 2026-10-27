@@ -15,6 +15,7 @@ import { ObsClient } from './obsClient'
 import { buildDiagnosticsZip } from './diagnostics'
 import { startDock } from './dock'
 import { Updater } from './updater'
+import { PluginManager } from './pluginManager'
 import { launchInfo } from '@shared/changelog'
 import { SUPPORT_EMAIL } from '@shared/support'
 import { readLastSeenVersion, writeLastSeenVersion } from './appState'
@@ -148,13 +149,16 @@ function main() {
 
   // ---- controller + OBS ----
   let pushTimer: ReturnType<typeof setTimeout> | null = null
+  // The OBS plugin (Seamless Mode). Declared first because the controller asks it, via a callback, whether the plugin is usable.
+  let plugins: PluginManager | undefined
   const controller: Controller = new Controller({
     obs: { call: (t, d) => obs.link.call(t, d), batch: (r) => obs.link.batch(r) },
     ptzSink: driver,
     ptzLog,
     log: obsLog,
     getConfig: () => store.get(),
-    onChange: () => schedulePush()
+    getPluginUsable: () => plugins?.usable ?? false,
+    onChange: () => onPluginInputsChanged()
   })
   const obs: ObsClient = new ObsClient(obsLog, () => store.get(), controller)
   obs.onStatus = () => schedulePush()
@@ -170,8 +174,8 @@ function main() {
       scenes: controller.obsScenes,
       camera: { group: controller.ptz.cameraGroup, tracking: controller.ptz.tracking, driver: driver.status, hwnd: driver.hwnd },
       dryRun: controller.dryRun,
-      bridgeState: controller.bridgeState,
-      update: updater.info
+      update: updater.info,
+      plugin: plugins!.info()
     }
   }
   function schedulePush() {
@@ -184,6 +188,39 @@ function main() {
   }
   logger.onEntry = (e) => win?.webContents.send(IPC.logPush, e)
 
+  plugins = new PluginManager(
+    log,
+    {
+      obsVersion: () => (obs.status === 'connected' ? controller.obsVersion : ''),
+      kindLoaded: () => controller.pluginKindLoaded,
+      instanceFound: () => controller.pluginInstanceFound,
+      riskAcceptedObs: () => store.get().plugin.riskAcceptedObs
+    },
+    version
+  )
+  /** Anything the plugin status depends on changed: re-check usability (re-priming OBS if it flipped) and tell the UI. */
+  let lastUsable = false
+  let lastObsVersion = ''
+  function onPluginInputsChanged() {
+    const v = obs.status === 'connected' ? controller.obsVersion : ''
+    if (v !== lastObsVersion) {
+      lastObsVersion = v
+      if (v) void plugins!.refresh() // OBS (re)connected, or its version changed
+    }
+    const u = plugins!.usable
+    if (u !== lastUsable) {
+      lastUsable = u
+      log.info(`OBS plugin usable: ${u ? 'yes' : 'no'} - Seamless Mode ${u ? 'will use the plugin transition' : 'falls back to Fast Mode'}`)
+      controller.onConfigChanged()
+    }
+    schedulePush()
+  }
+  plugins.onChange = onPluginInputsChanged
+  plugins.onUpdateFound = (v) =>
+    plugins!.notifyUpdate(v, () => {
+      showWindow()
+      win?.webContents.send(IPC.openSettings, 'transitions')
+    })
   const updater = new Updater(log)
   updater.onChange = () => {
     updateTray()
@@ -214,6 +251,7 @@ function main() {
   driver.start(c0.emeet)
   if (c0.general.launchObsOnStart) void launchObs(c0)
   obs.start()
+  plugins.start()
   updater.start()
 
   store.onExternalChange = (cfg) => {
@@ -400,7 +438,7 @@ function main() {
       copyFileSync(src, dest)
       clearCardFiles(dest)
       const before = store.get()
-      const after = store.update((c) => (c.seamless.cardImage = dest))
+      const after = store.update((c) => (c.plugin.imagePath = dest))
       log.info(`Holding card picture set: ${src} (copied to ${dest})`)
       afterConfigChange(before, after)
       return { ok: true, cfg: after }
@@ -411,14 +449,14 @@ function main() {
   }
   function removeHoldingCard(): HoldingCardResult {
     const before = store.get()
-    const after = store.update((c) => (c.seamless.cardImage = ''))
+    const after = store.update((c) => (c.plugin.imagePath = ''))
     clearCardFiles()
     log.info('Holding card picture removed.')
     afterConfigChange(before, after)
     return { ok: true, cfg: after }
   }
   function holdingCardPreview(): string | null {
-    const p = store.get().seamless.cardImage
+    const p = store.get().plugin.imagePath
     if (!p || !existsSync(p)) return null
     const img = nativeImage.createFromPath(p)
     return img.isEmpty() ? null : img.resize({ width: 320 }).toDataURL()
@@ -481,6 +519,21 @@ function main() {
   ipcMain.handle(IPC.removeHoldingCard, () => removeHoldingCard())
   ipcMain.handle(IPC.holdingCardPreview, () => holdingCardPreview())
   ipcMain.handle(IPC.installUpdate, () => updater.promptInstall())
+  ipcMain.handle(IPC.pluginCheck, async () => {
+    await controller.recheckPlugin()
+    await plugins!.refresh()
+  })
+  ipcMain.handle(IPC.pluginInstall, async () => {
+    await plugins!.install()
+    await controller.recheckPlugin()
+  })
+  ipcMain.handle(IPC.pluginRisk, (_e, accept: boolean) => {
+    const before = store.get()
+    const after = store.update((c) => (c.plugin.riskAcceptedObs = accept ? controller.obsVersion : ''))
+    log.info(accept ? `Seamless Mode: carrying on with OBS ${controller.obsVersion} at the user's own risk.` : 'Seamless Mode: risk acceptance withdrawn.')
+    afterConfigChange(before, after)
+  })
+  ipcMain.handle(IPC.openObs, () => launchObs(store.get()))
   ipcMain.handle(IPC.checkUpdate, () => updater.check(true))
   ipcMain.handle(IPC.clearLogsView, () => logger.clearView())
   ipcMain.handle(IPC.getLaunchInfo, () => launch)
@@ -522,6 +575,7 @@ function main() {
     controller.dispose()
     dock.close()
     updater.stop()
+    plugins?.stop()
     obs.stop()
     driver.stop()
     store.close()
