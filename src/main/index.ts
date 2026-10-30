@@ -206,6 +206,8 @@ function main() {
     if (v !== lastObsVersion) {
       lastObsVersion = v
       if (v) void plugins!.refresh() // OBS (re)connected, or its version changed
+      // OBS opened or closed: let the plugin buttons in Settings follow (after a moment, so the process has really gone)
+      setTimeout(() => void plugins!.updateObsRunning(), v ? 500 : 2500)
     }
     const u = plugins!.usable
     if (u !== lastUsable) {

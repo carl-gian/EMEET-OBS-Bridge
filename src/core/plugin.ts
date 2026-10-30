@@ -113,7 +113,15 @@ export function decidePluginState(f: PluginFacts): PluginDecision {
     if (f.manifest && compareVersions(f.manifest.minBridge, f.bridgeVersion) > 0) return no('bridge-too-old')
     return no('not-installed')
   }
-  if (!f.obsVersion) return no('unknown')
+  if (!f.obsVersion) {
+    // OBS is closed. A waiting update must still be offered NOW: installing needs OBS closed, so hiding it until OBS is
+    // running again (the old behaviour) sent people round in circles ("close OBS" -> "connect OBS" -> "close OBS" ...).
+    if (f.manifest) {
+      const newer = compareVersions(f.manifest.obs, f.installed.obs) > 0 || (compareVersions(f.manifest.obs, f.installed.obs) === 0 && compareVersions(f.manifest.plugin, f.installed.plugin) > 0)
+      if (newer) return no(compareVersions(f.manifest.minBridge, f.bridgeVersion) > 0 ? 'bridge-too-old' : 'update-available')
+    }
+    return no('unknown')
+  }
 
   const sameObs = compareVersions(f.obsVersion, f.installed.obs) === 0
   const manifestFitsObs = !!f.manifest && compareVersions(f.manifest.obs, f.obsVersion) === 0

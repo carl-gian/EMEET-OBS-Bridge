@@ -156,6 +156,15 @@ export class PluginManager {
     return new Promise((resolve) => exec('tasklist /FI "IMAGENAME eq obs64.exe" /NH', (_e, out) => resolve(/obs64\.exe/i.test(out ?? ''))))
   }
 
+  /** Cheap check whether OBS is running (so the buttons in Settings follow OBS being closed or opened). */
+  async updateObsRunning() {
+    const running = await this.checkObsRunning()
+    if (running !== this.obsRunning) {
+      this.obsRunning = running
+      this.onChange()
+    }
+  }
+
   /** Reads the installed plugin and asks GitHub for the newest one. Safe to call any time. */
   async refresh() {
     if (this.busy === 'installing') return

@@ -14,7 +14,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       'Each EMEET preset button is now pressed 5 times during every transition, spread evenly from the first press until the transition ends (so the last press lands as it finishes). A newer scene change cancels the presses that have not happened yet, so an old preset is never pressed after you have moved on.',
       'After a transition that moved the camera, the app presses the live scene\'s preset one more time, exactly like pressing Resync by hand (0.6 s after the transition ends). This is for presets that the camera ignores during a transition and only obeys afterwards.',
-      'Both can be changed in Settings > Camera (Presses per preset, Extra press after a transition). The click log now also records which window had the focus at each press, to help find problems.'
+      'Both can be changed in Settings > Camera (Presses per preset, Extra press after a transition). The click log now also records which window had the focus at each press, to help find problems.',
+      'Fixed a loop when updating the OBS plugin: with OBS closed, the app now offers a waiting plugin update straight away (installing needs OBS closed), and the Open OBS / Install buttons follow OBS being opened or closed.'
     ]
   },
   {

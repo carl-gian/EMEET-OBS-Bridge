@@ -613,7 +613,7 @@ function SeamlessPanel({
   const tone = s === 'ready' ? 'bg-ok/10 text-ok' : s === 'obs-newer' || s === 'obs-older' ? 'bg-bad/10 text-bad' : s === 'update-available' ? 'bg-accent/15 text-accent' : 'bg-warn/10 text-warn'
 
   const message: Record<PluginInfo['status'], string> = {
-    unknown: 'Connect to OBS so the plugin can be checked. Until then Fast Mode is used.',
+    unknown: plugin.installedVersion ? `The plugin (${plugin.installedVersion}, for OBS ${plugin.builtForObs}) is installed. Start OBS so it can be checked and used. Until then Fast Mode is used.` : 'Connect to OBS so the plugin can be checked. Until then Fast Mode is used.',
     'not-installed': plugin.latestVersion ? `The OBS plugin is not installed yet. Version ${plugin.latestVersion} (for OBS ${plugin.latestObs}) is ready to install. Until then Fast Mode is used.` : 'The OBS plugin is not installed yet, and no plugin release was found online. Until then Fast Mode is used.',
     'restart-obs': 'The plugin is installed. Start (or restart) OBS so it can load the plugin. Until then Fast Mode is used.',
     'needs-transition': 'The plugin is loaded in OBS, but the transition has not been added yet. In OBS, in the Scene Transitions panel, click "+" and choose "EMEET Bridge (fade, hold on picture, fade)". Leave its settings alone: they come from this app. Then press Check again.',
@@ -690,8 +690,8 @@ function SeamlessPanel({
             {s === 'update-available' ? `Update plugin to ${plugin.latestVersion}` : 'Install OBS plugin'}
           </Button>
         )}
-        {(s === 'not-installed' || s === 'update-available') && plugin.obsRunning && <span className="text-xs text-warn">OBS is running: close it first, then press the button.</span>}
-        {(s === 'restart-obs' || s === 'not-installed') && hasObsPath && !plugin.obsRunning && (
+        {(s === 'not-installed' || s === 'update-available') && plugin.obsRunning && <span className="text-xs text-warn">OBS is running: close it first, then press the button. You do not need to leave this window.</span>}
+        {(s === 'restart-obs' || s === 'not-installed' || s === 'unknown') && hasObsPath && !plugin.obsRunning && (
           <Button onClick={() => void window.api.openObs()} disabled={busy}>
             Open OBS
           </Button>

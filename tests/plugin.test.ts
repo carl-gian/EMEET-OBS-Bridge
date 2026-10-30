@@ -29,6 +29,14 @@ describe('decidePluginState (the version contract)', () => {
   it('unknown while OBS is not connected', () => {
     expect(status({ obsVersion: '' })).toBe('unknown')
   })
+  it('OBS closed: a waiting plugin update is offered right away (installing needs OBS closed - no more going in circles)', () => {
+    expect(decidePluginState(facts({ obsVersion: '', manifest: { ...manifest, plugin: '1.0.2' } }))).toEqual({ status: 'update-available', usable: false })
+    // a plugin for a newer OBS is also the way forward
+    expect(status({ obsVersion: '', manifest: { ...manifest, plugin: '1.1.0', obs: '32.3.0' } })).toBe('update-available')
+    // nothing newer waiting: just unknown until OBS runs
+    expect(status({ obsVersion: '' })).toBe('unknown')
+    expect(status({ obsVersion: '', manifest: { ...manifest, plugin: '1.0.2', minBridge: '9.0.0' } })).toBe('bridge-too-old')
+  })
   it('installed but not loaded yet: restart OBS', () => {
     expect(status({ kindLoaded: false })).toBe('restart-obs')
   })
