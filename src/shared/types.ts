@@ -71,7 +71,7 @@ export interface AppConfig {
     holdMs: number // how long the picture stays (default 3500)
     riskAcceptedObs: string // OBS version the user chose to carry on with although the plugin was built for another ('' = none)
   }
-  ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean } // fireOffsetMs: 0 = click as soon as OBS reports the transition started
+  ptz: { enabled: boolean; fireOffsetMs: number; syncOnStartup: boolean; verifyAfterMs: number } // fireOffsetMs: 0 = click as soon as OBS reports the transition started; verifyAfterMs: one more press of the live scene's preset this long after a camera-moving transition ends (0 = off)
   tracking: {
     enabled: boolean // master switch ("Enable Tracking")
     enableClick: Point | null

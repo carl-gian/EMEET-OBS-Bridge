@@ -184,7 +184,8 @@ function Send-BackgroundClick {
     $q = New-Object EmeetPoint; $q.X = $sx; $q.Y = $sy
     [void][EmeetWin]::ScreenToClient($target, [ref]$q)
     $lp = MakeLParam $q.X $q.Y
-    Log ("click screen({0},{1}) -> hwnd 0x{2:X} [{3}] client({4},{5})" -f $sx, $sy, [int64]$target, [EmeetWin]::Class($target), $q.X, $q.Y)
+    $fgw = [EmeetWin]::GetForegroundWindow()
+    Log ("click screen({0},{1}) -> hwnd 0x{2:X} [{3}] client({4},{5}) foreground=0x{6:X} [{7}]" -f $sx, $sy, [int64]$target, [EmeetWin]::Class($target), $q.X, $q.Y, [int64]$fgw, [EmeetWin]::Class($fgw))
 
     if ($em.sendMouseActivate) { [void][EmeetWin]::PostMessage($Top, 0x21, $Top, [IntPtr][int64](0x0201 -shl 16 -bor 1)) }  # WM_MOUSEACTIVATE
     [void][EmeetWin]::PostMessage($target, 0x0200, [IntPtr]::Zero, $lp)      # WM_MOUSEMOVE

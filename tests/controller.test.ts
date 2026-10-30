@@ -13,6 +13,7 @@ const BLACK = 'BLACK SCREEN'
 function setup(mutate?: (c: AppConfig) => void) {
   const cfg = defaultConfig()
   cfg.emeet.presetClickCount = 1 // most tests look at a single press; the repeat has its own test below
+  cfg.ptz.verifyAfterMs = 0 // and the verification press has its own test too
   mutate?.(cfg)
   const sent: PtzCommand[] = []
   const calls: { type: string; data?: any }[] = []
@@ -291,22 +292,162 @@ describe('Transition settings are applied after OBS has switched (606 race)', ()
   })
 })
 
-describe('Preset button is pressed several times', () => {
-  it('presses each preset 3 times, 300 ms apart, by default; tracking follows the last press', async () => {
+describe('Preset button is pressed several times, spread over the transition', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const cross = (c: AppConfig) => {
+    c.emeet.presetClickCount = 5
+    c.ptz.fireOffsetMs = 0
+  }
+  const presses = (t: ReturnType<typeof setup>) => t.sent.filter((s) => s.presetId === 'Preset2')
+
+  it('the first press goes with the command, the other 4 follow evenly until the transition ends', async () => {
+    const t = setup(cross) // Fast Mode: 1000 ms fade
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    await flush()
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade to Black' })
+    expect(presses(t)).toHaveLength(1)
+    expect(presses(t)[0].clicks).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(249)
+    expect(presses(t)).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2) // +250
+    expect(presses(t)).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(800) // +500, +750, +1000
+    expect(presses(t)).toHaveLength(5)
+    expect(presses(t)[4].reason).toMatch(/press 5\/5/)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(presses(t)).toHaveLength(5) // never more
+  })
+
+  it('in Seamless Mode the presses are spread from the end of the first fade to the end of the transition', async () => {
     const t = setup((c) => {
-      c.emeet.presetClickCount = 3
+      cross(c)
+      c.transitions.crossGroupMode = 'seamless'
+      c.plugin = { imagePath: '', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' } // 5100 ms in total
+    })
+    t.flags.pluginUsable = true
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: READER })
+    await flush()
+    const t0 = Date.now()
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'My Seamless' })
+    expect(t.sent[0].fireAt! - t0).toBe(800)
+    // follow-ups: 4300 ms span / 4 gaps = 1075 ms apart, the last one at +800 + 4300 = 5100 ms
+    await vi.advanceTimersByTimeAsync(800 + 1074)
+    expect(presses(t)).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2)
+    expect(presses(t)).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(4300 - 1075 + 10)
+    expect(presses(t)).toHaveLength(5)
+  })
+
+  it('a newer preset command cancels the presses that have not happened yet', async () => {
+    const t = setup(cross)
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER }) // quick-fire: fixed 300 ms gap
+    await vi.advanceTimersByTimeAsync(10)
+    expect(presses(t)).toHaveLength(1)
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: TABLE }) // a different preset now
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(presses(t)).toHaveLength(1) // Preset 2 is never pressed again
+    expect(t.sent.filter((s) => s.presetId === 'Preset3')).toHaveLength(5)
+  })
+
+  it('without a transition (Resync, other programs) the presses are presetClickGapMs apart', async () => {
+    const t = setup((c) => {
+      cross(c)
       c.emeet.presetClickGapMs = 300
+    })
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
+    await vi.advanceTimersByTimeAsync(299)
+    expect(presses(t)).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2)
+    expect(presses(t)).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(presses(t)).toHaveLength(5)
+  })
+
+  it('tracking is clicked with the first press only', async () => {
+    const t = setup((c) => {
+      cross(c)
       c.tracking.enableClick = { x: 10, y: 20 }
       c.sceneTracking = { [READER]: true }
     })
     await t.c.initSession()
     t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: READER })
-    const clicks = t.sent[0].clicks
-    expect(clicks.map((k) => [k.x, k.y, k.delayMs ?? 0])).toEqual([[1025, 764, 0], [1025, 764, 300], [1025, 764, 300], [10, 20, 500]])
-    expect(clicks[1].note).toBe('preset Preset2 (press 2/3)')
+    expect(t.sent[0].clicks.map((k) => [k.x, k.y])).toEqual([[1025, 764], [10, 20]])
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(t.sent.slice(1).every((s) => s.clicks.length === 1 && s.clicks[0].x === 1025)).toBe(true)
   })
-  it('the shipped default is 3 presses, 300 ms', () => {
+
+  it('the shipped default is 5 presses, 300 ms apart when there is no transition', () => {
     const d = defaultConfig()
-    expect([d.emeet.presetClickCount, d.emeet.presetClickGapMs]).toEqual([3, 300])
+    expect([d.emeet.presetClickCount, d.emeet.presetClickGapMs]).toEqual([5, 300])
+  })
+})
+
+describe('Verification press after a camera-moving transition (what Resync does by hand)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const withVerify = (c: AppConfig) => {
+    c.ptz.verifyAfterMs = 600
+    c.ptz.fireOffsetMs = 0
+  }
+  const run = async (t: ReturnType<typeof setup>, target = READER) => {
+    await t.c.initSession()
+    await flush()
+    t.c.handleEvent('CurrentPreviewSceneChanged', { sceneName: target })
+    await flush()
+    t.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade to Black' })
+    t.c.handleEvent('CurrentProgramSceneChanged', { sceneName: target })
+    t.c.handleEvent('SceneTransitionEnded', { transitionName: 'Fade to Black' })
+    await flush()
+  }
+
+  it('presses the live scene preset once more, forced and single, 600 ms after the transition ends', async () => {
+    const t = setup(withVerify)
+    await run(t)
+    const before = t.sent.length // the early press
+    await vi.advanceTimersByTimeAsync(599)
+    expect(t.sent.length).toBe(before)
+    await vi.advanceTimersByTimeAsync(2)
+    expect(t.sent.length).toBe(before + 1)
+    const v = t.sent.at(-1)!
+    expect(v.presetId).toBe('Preset2')
+    expect(v.clicks).toHaveLength(1)
+    expect(v.reason).toMatch(/verification press/)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(t.sent.length).toBe(before + 1) // exactly one
+  })
+
+  it('does nothing for a same-preset transition, when switched off, or if a new transition started meanwhile', async () => {
+    const same = setup(withVerify)
+    await run(same, CLOSE) // FULL -> CLOSE: both Preset1
+    const n = same.sent.length
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(same.sent.length).toBe(n)
+
+    const off = setup((c) => {
+      withVerify(c)
+      c.ptz.verifyAfterMs = 0
+    })
+    await run(off)
+    const m = off.sent.length
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(off.sent.length).toBe(m)
+
+    const busy = setup(withVerify)
+    await run(busy)
+    busy.c.handleEvent('SceneTransitionStarted', { transitionName: 'Fade to Black' }) // operator transitions again at once
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(busy.sent.some((x) => /verification press/.test(x.reason))).toBe(false)
   })
 })

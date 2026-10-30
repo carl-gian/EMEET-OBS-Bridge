@@ -7,6 +7,13 @@ import type { PtzClick } from '@shared/types'
 export interface InvokeOpts {
   fireAt?: number // absolute unix ms
   force?: boolean // bypass the "camera already on that preset" dedupe
+  /**
+   * How long the extra presses may be spread over (ms, counted from the first press): during a transition this is the time left until the
+   * transition ends, so the preset button is pressed again and again while the picture is covered. Without it the fixed gap setting is used.
+   */
+  spanMs?: number
+  /** One press only (no repeats) - used for the verification press after a transition. */
+  single?: boolean
 }
 
 /**
@@ -21,6 +28,8 @@ export class PtzDispatcher {
   dryRun = false
   private seq = 0
   private warnedNoTrackingClick = false
+  /** Timers of the extra presses still to come. A new preset command cancels them (stale presses must never move the camera back). */
+  private repeats: ReturnType<typeof setTimeout>[] = []
 
   constructor(
     private sink: PtzSink,
@@ -33,6 +42,7 @@ export class PtzDispatcher {
 
   /** Called on config reload: if the owner changed the "assume tracking is on" startup guess before any click, follow it. */
   resetTrackingGuess() {
+    this.cancelRepeats()
     this.tracking = this.getConfig().tracking.assumeInitiallyOn
   }
 
@@ -71,19 +81,7 @@ export class PtzDispatcher {
         if (pc.length === 0) {
           this.log.warn(`Preset '${groupId}' (${label}) has no x/y in settings - camera NOT moved.`)
         } else {
-          // Press the preset button several times (the EMEET app sometimes ignores one press): the whole preset sequence is
-          // repeated presetClickCount times, with presetClickGapMs before each repeat. Tracking is clicked after the last one.
-          const times = Math.max(1, cfg.emeet.presetClickCount ?? 1)
-          const gap = cfg.emeet.presetClickGapMs ?? 300
-          for (let r = 0; r < times; r++) {
-            pc.forEach((c, i) =>
-              clicks.push({
-                ...c,
-                ...(r > 0 && i === 0 ? { delayMs: gap } : {}),
-                note: `preset ${groupId}${i > 0 ? ` #${i + 1}` : ''}${r > 0 ? ` (press ${r + 1}/${times})` : times > 1 ? ` (press 1/${times})` : ''}`
-              })
-            )
-          }
+          pc.forEach((c, i) => clicks.push({ ...c, note: i === 0 ? `preset ${groupId}` : `preset ${groupId} #${i + 1}` }))
           presetSent = true
         }
       }
@@ -122,6 +120,8 @@ export class PtzDispatcher {
       return true
     }
 
+    if (presetSent) this.cancelRepeats() // a new preset command makes any older extra presses stale
+    const presetClicksNow = presetSent ? presetClicks(cfg.presets[groupId!]) : []
     this.sink.send({
       id: ++this.seq,
       label,
@@ -133,6 +133,43 @@ export class PtzDispatcher {
       emeet: cfg.emeet
     })
     this.log.info(`PTZ -> ${what} sent to worker, ${timing} [${reason}]`)
+    if (presetSent && !opts.single) this.scheduleRepeats(groupId!, label, presetClicksNow, cfg, wait, opts.spanMs, reason)
     return true
+  }
+
+  /**
+   * "Press it again, just to be sure": the first press goes out with the command; the other presses (presetClickCount - 1) are separate
+   * single-press commands sent later, spread over the transition (or presetClickGapMs apart when there is no transition). They are separate
+   * so the worker is never busy for seconds, and so a newer command can cancel the ones that have not happened yet.
+   */
+  private scheduleRepeats(groupId: string, label: string, pc: PtzClick[], cfg: AppConfig, firstInMs: number, spanMs: number | undefined, reason: string) {
+    const times = Math.max(1, cfg.emeet.presetClickCount ?? 1)
+    if (times <= 1 || pc.length === 0) return
+    const fixedGap = cfg.emeet.presetClickGapMs ?? 300
+    const gap = spanMs !== undefined && spanMs > 0 ? Math.min(5000, Math.max(100, Math.round(spanMs / (times - 1)))) : fixedGap
+    for (let n = 1; n < times; n++) {
+      const t = setTimeout(() => {
+        this.repeats = this.repeats.filter((x) => x !== t)
+        if (this.dryRun) return
+        const id = ++this.seq
+        this.sink.send({
+          id,
+          label,
+          presetId: groupId,
+          reason: `press ${n + 1}/${times} [${reason}]`,
+          issuedAt: this.now(),
+          clicks: pc.map((c, i) => ({ ...c, delayMs: i === 0 ? 0 : c.delayMs, note: `preset ${groupId} (press ${n + 1}/${times})${i > 0 ? ` #${i + 1}` : ''}` })),
+          emeet: cfg.emeet
+        })
+        this.log.info(`PTZ -> preset '${groupId}' (${label}) press ${n + 1}/${times}`)
+      }, firstInMs + n * gap)
+      this.repeats.push(t)
+    }
+  }
+
+  /** Forget the extra presses that have not happened yet (new preset command, shutdown). */
+  cancelRepeats() {
+    for (const t of this.repeats) clearTimeout(t)
+    this.repeats = []
   }
 }

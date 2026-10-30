@@ -39,6 +39,8 @@ export class Controller {
   private resolved: Record<Key, Resolved> = { intraGroup: { name: null, kind: null }, crossGroup: { name: null, kind: null } }
   private groupMap = new Map<string, string>()
   private ready = false
+  private groupAtStart: string | null = null
+  private verifyTimer: ReturnType<typeof setTimeout> | null = null
   private _dryRun = false
 
   constructor(private d: Deps) {
@@ -398,6 +400,9 @@ export class Controller {
   private onTransitionStarted(transitionName: string) {
     this.transitionInFlight = true
     this.transitionInFlightSince = this.now()
+    if (this.verifyTimer) clearTimeout(this.verifyTimer)
+    this.verifyTimer = null
+    this.groupAtStart = this.group(this.programScene)
 
     const dec = this.currentDecision()
     this.d.log.info(`TRANSITION STARTED '${transitionName}'  (${dec.origin} -> ${dec.target})`)
@@ -426,7 +431,8 @@ export class Controller {
       this.pendingCrossCheck.earlyGroup = dec.targetGroup
       const off = this.cfg.ptz.fireOffsetMs
       this.ptz.invoke(dec.targetGroup, dec.target, off > 0 ? `early fire at transition start (click at +${off} ms)` : 'early fire at transition start (immediate)', {
-        fireAt: off > 0 ? this.now() + off : undefined
+        fireAt: off > 0 ? this.now() + off : undefined,
+        spanMs: Math.max(0, dec.durationMs - off) // spread the extra presses until the transition ends
       })
     }
     this.d.log.info('        ' + (dec.isCrossGroup ? 'expecting CROSS-GROUP -> PTZ preset once confirmed' : 'expecting INTRA-GROUP, no preset click'))
@@ -451,8 +457,28 @@ export class Controller {
         this.confirmTarget(dec, earlyGroup, 'verified after transition')
       }
     }
+    this.scheduleVerification()
     if (this.cfg.behavior.reprimeOnTransitionEnd) this.primeForCurrentPair('transition ended (resync)')
     this.changed()
+  }
+
+  /**
+   * The camera sometimes ignores a press made while a transition is running (one preset in particular did, and pressing Resync afterwards
+   * always worked). So when a transition that had to move the camera has ended, press the live scene's preset ONE more time, like Resync would.
+   * Pressing the preset the camera is already on does nothing visible.
+   */
+  private scheduleVerification() {
+    const wait = this.cfg.ptz.verifyAfterMs
+    const g = this.group(this.programScene)
+    const moved = !!g && !!this.groupAtStart && g !== this.groupAtStart
+    this.groupAtStart = null
+    if (!wait || !moved) return
+    const scene = this.programScene
+    this.verifyTimer = setTimeout(() => {
+      this.verifyTimer = null
+      if (this.transitionInFlight || this.group(this.programScene) !== g) return // something newer is happening
+      this.ptz.invoke(g, scene, 'verification press after the transition (same as Resync)', { force: true, single: true })
+    }, wait)
   }
 
   /** Shared "OBS told us the real target" logic: fix a wrong early guess / fire a missed cross-group click. */
@@ -505,7 +531,9 @@ export class Controller {
   }
 
   dispose() {
-    /* nothing to clean up: the controller owns no timers */
+    this.ptz.cancelRepeats()
+    if (this.verifyTimer) clearTimeout(this.verifyTimer)
+    this.verifyTimer = null
   }
 
   /** Ask OBS again whether our plugin is loaded and its transition exists (after the user installs it or adds the transition). */

@@ -84,9 +84,9 @@ describe('config migration', () => {
     expect(normalizeConfig({ configVersion: 2, ptz: { fireOffsetMs: 200 } }).config.ptz.fireOffsetMs).toBe(200)
   })
   it('preset press count and gap are clamped', () => {
-    expect(normalizeConfig({ emeet: { presetClickCount: 99, presetClickGapMs: 5 } }).config.emeet).toMatchObject({ presetClickCount: 5, presetClickGapMs: 100 })
+    expect(normalizeConfig({ emeet: { presetClickCount: 99, presetClickGapMs: 5 } }).config.emeet).toMatchObject({ presetClickCount: 10, presetClickGapMs: 100 })
     expect(normalizeConfig({ emeet: { presetClickCount: 0 } }).config.emeet.presetClickCount).toBe(1)
-    expect(normalizeConfig({}).config.emeet).toMatchObject({ presetClickCount: 3, presetClickGapMs: 300 })
+    expect(normalizeConfig({}).config.emeet).toMatchObject({ presetClickCount: 5, presetClickGapMs: 300 })
   })
   it('plugin fade/hold are clamped to sane values', () => {
     const { config } = normalizeConfig({ plugin: { fadeMs: -5, holdMs: 999999, imagePath: 5 } })

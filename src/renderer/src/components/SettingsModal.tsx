@@ -545,13 +545,22 @@ export default function SettingsModal({
                     <div className="mb-1 flex items-center text-xs text-mute">
                       Presses per preset
                       <HelpTip title="Presses per preset">
-                        Each EMEET preset button is pressed this many times (1 to 5), a moment apart, to be sure the camera reacts. Pressing a preset again does no harm. Default: 3.
+                        Each EMEET preset button is pressed this many times (1 to 10) to be sure the camera reacts. During a transition the presses are spread over the whole transition, so the last one lands as it ends; a newer scene change cancels the presses that have not happened yet. Pressing a preset again does no harm. Default: 5.
                       </HelpTip>
                     </div>
-                    <NumInput value={d.emeet.presetClickCount} onChange={(v) => edit((c) => (c.emeet.presetClickCount = Math.max(1, Math.min(5, Math.round(v)))))} />
+                    <NumInput value={d.emeet.presetClickCount} onChange={(v) => edit((c) => (c.emeet.presetClickCount = Math.max(1, Math.min(10, Math.round(v)))))} />
                   </div>
                   <div>
-                    <div className="mb-1 text-xs text-mute">Gap between presses (ms)</div>
+                    <div className="mb-1 flex items-center text-xs text-mute">
+                      Extra press after a transition (ms)
+                      <HelpTip title="Extra press after a transition">
+                        When a transition that moved the camera has ended, the preset of the live scene is pressed once more after this many milliseconds, exactly like pressing Resync by hand. 0 turns it off. Default: 600.
+                      </HelpTip>
+                    </div>
+                    <NumInput value={d.ptz.verifyAfterMs} onChange={(v) => edit((c) => (c.ptz.verifyAfterMs = Math.max(0, Math.min(10000, Math.round(v)))))} />
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-mute">Gap when there is no transition (ms)</div>
                     <NumInput value={d.emeet.presetClickGapMs} onChange={(v) => edit((c) => (c.emeet.presetClickGapMs = Math.max(100, Math.min(2000, Math.round(v)))))} />
                   </div>
                   <div>

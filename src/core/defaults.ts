@@ -40,7 +40,7 @@ export function defaultConfig(): AppConfig {
       }
     },
     plugin: { imagePath: '', fadeMs: 800, holdMs: 3500, riskAcceptedObs: '' },
-    ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false },
+    ptz: { enabled: true, fireOffsetMs: 0, syncOnStartup: false, verifyAfterMs: 600 },
     tracking: {
       enabled: false,
       enableClick: { x: 1071, y: 315 },
@@ -62,7 +62,7 @@ export function defaultConfig(): AppConfig {
       sendMouseActivate: false,
       clickHoldMs: 40,
       clickDelayMs: 250,
-      presetClickCount: 3,
+      presetClickCount: 5,
       presetClickGapMs: 300
     },
     behavior: {
